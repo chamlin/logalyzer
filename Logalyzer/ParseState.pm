@@ -86,24 +86,45 @@ sub new {
         'stats' => {},
     };
     return bless $blank, $class;
-};
+}
+
+# get it, open if needed.
+sub get_fh {
+    my ($self, $outfile) = @_;
+    my $out = $self->{fh}{$outfile};
+    unless ($out) {
+        open ($out, '>', $outfile) or die "Can't open $outfile.\n";
+        print STDERR "> $outfile\n";
+        $self->{fh}{$outfile} = $out;
+    }
+    return $out;
+}
+
+sub close_fh {
+    my ($state, $outfile) = @_;
+    my $out = $state->{fh}{$outfile};
+    if ($out) {
+        close ($out);
+        delete $state->{fh}{$outfile};
+    }
+}
 
 # stats that will be dumped, and also level counts, for current file
 sub current_file_stats {
     my ($self) = @_;
     return $self->{stats}{$self->{current_file}};
-};
+}
 
 # stats that will be dumped
 sub current_stats {
     my ($self) = @_;
     return $self->{stats}{$self->{current_file}}{stats};
-};
+}
 
 sub current_line {
     my ($self) = @_;
     return $self->{current_line};
-};
+}
 
 sub event_label { 
     my ($self, $event) = @_;
@@ -111,7 +132,7 @@ sub event_label {
         return $self->{event_info}{$event}{label};
     }
     return $self->{event_info}{default}{op};
-};
+}
 
 sub event_op { 
     my ($self, $event) = @_;
@@ -119,7 +140,7 @@ sub event_op {
         return $self->{event_info}{$event}{op};
     }
     return $self->{event_info}{default}{op};
-};
+}
 
 sub resolve_options {
     my ($self) = @_;

@@ -13,6 +13,8 @@ use FindBin;                 # locate this script
 use lib $FindBin::Bin; 
 use Logalyzer::ParseState;
 
+use open qw< :encoding(UTF-8) >;
+
 my $state = new Logalyzer::ParseState();
 
 GetOptions (
@@ -27,15 +29,32 @@ GetOptions (
 $state->resolve_options ();
 
 foreach my $filename (@{$state->{filenames}}) {
-    print "$filename\n";
+    print STDERR "< $filename\n";
     process_file ($filename, $state);
 }
+
+sort_files ($state);
 
 dump_stats ($state);
 
 dump_state ($state);
 
 ############## subs
+
+# close out and sort the various output files.
+sub sort_files {
+    my ($state) = @_;
+    foreach my $filename (keys %{$state->{fh}}) {
+        # ok, let's try sys, since it will phony a time unless it's the very first line in the log file.
+        # if ($filename eq 'sys' || $filename =~ /\/sys$/) { next }
+        print STDERR "<  $filename\n";
+        $state->close_fh ($filename);
+        close $filename;
+        system "cat $filename | sort > $filename.tmp";
+        system "mv $filename.tmp $filename";
+        print STDERR " > $filename\n";
+    }
+};
 
 sub dump_stats {
     my ($state) = @_;
@@ -51,7 +70,7 @@ sub dump_stats {
     foreach my $filename (keys %{$state->{stats}}) {
         my $file_stats = $state->{stats}{$filename}{stats};
         my $stats_filename = get_stats_filename ($state, $filename);
-        my $stats_fh = get_fh ($state, $stats_filename);
+        my $stats_fh = $state->get_fh ($stats_filename);
         # header
         print $stats_fh ("#timestamp\t", join ($state->{separator}, @columns), "\n");
         foreach my $row (@rows) {
@@ -88,7 +107,7 @@ sub get_stats_filename {
 sub dump_state {
     my ($state) = @_;
     my $dumper_filename = $state;
-    my $dumper_fh = get_fh ($state, $state->{outdir} . '/Dumper.out');
+    my $dumper_fh = $state->get_fh ($state->{outdir} . '/Dumper.out');
     print $dumper_fh (Dumper $state);
 }
 
@@ -140,7 +159,7 @@ sub dump_line {
     my $outfile = $state->{outdir} . '/' . $event;
     # file is outdir/log-as
     # line is time line (logfile)
-    my $event_fh = get_fh ($state, $outfile);
+    my $event_fh = $state->get_fh ($outfile);
     my $to_print = join ("\t", (
         (exists $line_info->{date_time} ? $line_info->{date_time} : join ('', $state->{last_date_time}, '+')),
         $state->{current_file},
@@ -150,17 +169,8 @@ sub dump_line {
     # print level-based logging
     if (exists $line_info->{level} && $state->{levels}{$line_info->{level}} >= $state->{min_level_number}) {
         $outfile = "$state->{outdir}/level-$line_info->{level}";
-        $event_fh = get_fh ($state, $outfile);
+        $event_fh = $state->get_fh ($outfile);
         print $event_fh $to_print;
-    }
-}
-
-sub get_fh {
-    my ($state, $outfile) = @_;
-    my $out = $state->{fh}{$outfile};
-    unless ($out) {
-        open ($out, '>', $outfile) or die "Can't open $outfile.\n";
-        $state->{fh}{$outfile} = $out;
     }
 }
 
