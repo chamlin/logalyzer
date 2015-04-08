@@ -1,3 +1,3 @@
 # logalyzer
 
-it analyzes MarkLogic Error logs.  a bit.
+It analyzes MarkLogic error logs (a bit).
