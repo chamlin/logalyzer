@@ -30,6 +30,7 @@ GetOptions (
 $state->resolve_options ();
 
 if ($state->{testconfig}) {
+    $state->end_run;
     die "Config only: \n", Dumper $state;
 }
 
@@ -42,6 +43,8 @@ foreach my $filename (@{$state->{filenames}}) {
 sort_files ($state);
 
 dump_stats ($state);
+
+$state->end_run;
 
 dump_state ($state);
 

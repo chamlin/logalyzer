@@ -65,7 +65,6 @@ my $_event_info = {
     default => { op => 'count',  label => 'count' },
 };
 
-
 sub new {
     my $class = shift;
     my $blank = {
@@ -85,6 +84,7 @@ sub new {
         'outdir' => 'logalyzer-out',
         'fn' => {},
         'stats' => {},
+        'started' => time(),
     };
     return bless $blank, $class;
 }
@@ -120,6 +120,13 @@ sub current_file_stats {
 sub current_stats {
     my ($self) = @_;
     return $self->{stats}{$self->{current_file}}{stats};
+}
+
+
+sub end_run {
+    my ($self) = @_;
+    $self->{timer} = time() - $self->{started};
+    delete $self->{started};
 }
 
 sub current_line {
