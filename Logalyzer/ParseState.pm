@@ -81,6 +81,7 @@ sub new {
         'prefixes' => $_prefixes,
         'event_info' => $_event_info,
         'states' => {},
+        'testconfig' => 0,
         'outdir' => 'logalyzer-out',
         'fn' => {},
         'stats' => {},

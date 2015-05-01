@@ -22,11 +22,17 @@ GetOptions (
     'glob=s' => \$state->{glob},
     'outdir=s' => \$state->{outdir},
     'granularity=s' => \$state->{granularity},
+    'testconfig' => \$state->{testconfig},
     #'min_level=s' => \$state{min_level},
     #'stats_out=s' => \$state{stats_out},
 );
 
 $state->resolve_options ();
+
+if ($state->{testconfig}) {
+    die "Config only: \n", Dumper $state;
+}
+
 
 foreach my $filename (@{$state->{filenames}}) {
     print STDERR "< $filename\n";
