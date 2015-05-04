@@ -8,7 +8,7 @@ Treats each log file separately in stats, so probably cat the logs for each node
 
 # use
 
-Run, 
+Run, options will be shown.
 
 # todo
 
