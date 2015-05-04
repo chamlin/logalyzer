@@ -21,6 +21,7 @@ GetOptions (
     'file=s' => \$state->{file},
     'glob=s' => \$state->{glob},
     'outdir=s' => \$state->{outdir},
+    'junk=s' => \$state->{junk},
     'granularity=s' => \$state->{granularity},
     'testconfig' => \$state->{testconfig},
     #'min_level=s' => \$state{min_level},
@@ -28,12 +29,6 @@ GetOptions (
 );
 
 $state->resolve_options ();
-
-if ($state->{testconfig}) {
-    $state->end_run;
-    die "Config only: \n", Dumper $state;
-}
-
 
 foreach my $filename (@{$state->{filenames}}) {
     print STDERR "< $filename\n";
@@ -110,6 +105,9 @@ sub get_stats_value {
 
 sub get_stats_filename {
     my ($state, $filename) = @_;
+    # watch for directorys in filenames
+    $filename =~ s/^\.\///;
+    $filename =~ s/\//_/g;
     return $state->{outdir} . '/stats-' . $filename . '.out';
 }
 
@@ -142,6 +140,7 @@ sub process_line {
     my $line_info = $state->current_line();
     foreach my $classify (@{$line_info->{events}}) {
         my $event = $classify->{classify};
+        # skip
         if ($event eq 'JUNK') { return };
         my $op = $classify->{op};
         if ($op eq 'sum') {
@@ -183,12 +182,6 @@ sub dump_line {
     }
 }
 
-sub current_line_is_junk {
-    my ($line) = @_;
-    if ($line =~ /^\s*$/) { return 1 }
-    if ($line =~ /Info: EON_XDBC: render/) { return 1 }
-    return 0;
-}
 
 sub classify_line {
     my ($state) = @_;
@@ -199,7 +192,7 @@ sub classify_line {
     # default
 
     # quick out.  just work on this function.
-    if (current_line_is_junk ($line)) {
+    if (defined $state->{junk} && $line =~ /$state->{junk}/) {
         $state->{current_line}{events} = [{ classify => 'JUNK'}];
         return;
     }

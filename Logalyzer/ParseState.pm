@@ -4,7 +4,6 @@ package Logalyzer::ParseState;
 
 use Data::Dumper;
 
-
 my $_prefixes = {
     ADMIN => 1,
     ALERT => 1,
@@ -81,6 +80,7 @@ sub new {
         'event_info' => $_event_info,
         'states' => {},
         'testconfig' => 0,
+        'junk' => '',
         'outdir' => 'logalyzer-out',
         'fn' => {},
         'stats' => {},
@@ -152,16 +152,25 @@ sub event_op {
 
 sub resolve_options {
     my ($self) = @_;
+
+    if ($self->{testconfig}) {
+        $self->end_run;
+        print STDERR "Config only: \n", Dumper $self;
+        exit 1;
+    }
+
+    my $exit_with_usage = 0;
+
     # check files in
     if   ($self->{glob}) { $self->{filenames} = [grep { -f } glob ($self->{glob}) ]}
     elsif ($self->{file}) { $self->{filenames} = [grep { -f } (split (',', $self->{file}))] }
     else { }
-    unless (scalar @{$self->{filenames}}) { die "No filenames provided/found.\n" }
+    unless (scalar @{$self->{filenames}}) { print STDERR "No filenames provided/found.\n"; $exit_with_usage = 1; }
     # dir out
-    unless ($self->{outdir}) { $self->{outdir} = "." }
+    unless ($self->{outdir}) { $self->{outdir} = "logalyzer-out" }
     $self->{outdir} =~ s{/+$}{};
     unless (-d $self->{outdir}) { mkdir $self->{outdir} }
-    unless (-d $self->{outdir}) { die "Can't find/make dir $self->{outdir}.\n" }
+    unless (-d $self->{outdir}) { print STDERR "Can't find/make dir $self->{outdir}.\n"; $exit_with_usage = 1; }
     $self->{min_level_number} = $self->{levels}{$self->{min_level}};
     my $granularity = $self->{granularity};
     if ($granularity eq 'none') {
@@ -169,9 +178,53 @@ sub resolve_options {
     } else {
         unless ($self->{legal_granularities}{$granularity}) {
             my $s = "$granularity not legal granularity (legal: " . join (', ', (keys %{$self->{legal_granularities}})) . ").\n";
-            die $s;
+            print STDERR $s;
+            $exit_with_usage = 1;;
         }
     }
+
+    if ($exit_with_usage) {
+        $self->usage();
+        exit 1;
+    }
+}
+
+sub usage {
+  my ($self) = @_;
+
+  my $legal_granularities = join (', ', keys %{$self->{legal_granularities}});
+
+  my $usage = <<"END_MESSAGE";
+
+Logalyzer: 
+
+    Splits up MarkLogic logs into events and levels, keeps stats.
+
+    Output:  files for each message; for certain events (e.g., restarts); and for log levels.  Also stats files for events.
+
+Options:
+
+    --testconfig
+        resolve options, dump state, and stop.
+
+    --file XXX
+        XXX is a filename, or filenames together separated by commas.
+    --glob XXX
+        XXX is a glob pattern.  For example, --glob "Err*.txt"  will select all ErrorLogs in the current directory.
+
+        One of file or glob must be specified.
+
+    --outdir
+        Output directory; default is ./logalyzer.out; will be created.
+
+    --granularity
+        granularity of the time-related stats.  Default is hours.
+        Legal:  $legal_granularities.
+
+
+END_MESSAGE
+
+  print STDERR $usage;
 }
 
 

@@ -15,7 +15,7 @@ closedir $DIR;
 if ((scalar @stats) < 1) { die "no files found.\n" }
 
 # assume all same run, same columns
-open (my $in, '<', $stats[1]) or die "Can't open $stats[1].\n";
+open (my $in, '<', $stats[0]) or die "Can't open $stats[0].\n";
 my $line = <$in>;
 close ($in);
 
