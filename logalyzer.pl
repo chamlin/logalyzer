@@ -24,6 +24,8 @@ GetOptions (
     'junk=s' => \$state->{junk},
     'granularity=s' => \$state->{granularity},
     'testconfig' => \$state->{testconfig},
+    'namefrom=s' => \$state->{namefrom},
+    'nameto=s' => \$state->{nameto},
     #'min_level=s' => \$state{min_level},
     #'stats_out=s' => \$state{stats_out},
 );

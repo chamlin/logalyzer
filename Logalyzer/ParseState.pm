@@ -69,6 +69,8 @@ sub new {
     my $blank = {
         'file' => undef,
         'glob' => undef,
+        'namefrom' => '',
+        'nameto' => '',
         'filenames' => [],
         'min_level' => 'Notice',
         'granularity' => 'none',
@@ -150,14 +152,18 @@ sub event_op {
     return $self->{event_info}{default}{op};
 }
 
+sub get_logfile_key {
+    my ($state, $filename) = @_;
+    my $back = $filename;
+    # watch for directorys in filenames
+    if ($state->{namefrom}) {
+        $back =~ s/$state->{namefrom}/$state->{nameto}/;
+    }
+    return $back;
+}
+
 sub resolve_options {
     my ($self) = @_;
-
-    if ($self->{testconfig}) {
-        $self->end_run;
-        print STDERR "Config only: \n", Dumper $self;
-        exit 1;
-    }
 
     my $exit_with_usage = 0;
 
@@ -166,6 +172,18 @@ sub resolve_options {
     elsif ($self->{file}) { $self->{filenames} = [grep { -f } (split (',', $self->{file}))] }
     else { }
     unless (scalar @{$self->{filenames}}) { print STDERR "No filenames provided/found.\n"; $exit_with_usage = 1; }
+    # for testing, so keys dump in config run
+    foreach my $filename (@{$self->{filenames}}) {
+        push @{$self->{filekeys}}, $self->get_logfile_key ($filename);
+    }
+
+
+    if ($self->{testconfig}) {
+        $self->end_run;
+        print STDERR "Config only: \n", Dumper $self;
+        exit 1;
+    }
+
     # dir out
     unless ($self->{outdir}) { $self->{outdir} = "logalyzer-out" }
     $self->{outdir} =~ s{/+$}{};
