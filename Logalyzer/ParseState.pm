@@ -82,7 +82,7 @@ sub new {
         'event_info' => $_event_info,
         'states' => {},
         'testconfig' => 0,
-        'junk' => '',
+        'junk' => undef,
         'outdir' => 'logalyzer-out',
         'fn' => {},
         'stats' => {},
@@ -177,6 +177,7 @@ sub resolve_options {
         push @{$self->{filekeys}}, $self->get_logfile_key ($filename);
     }
 
+    $self->init_files();
 
     if ($self->{testconfig}) {
         $self->end_run;
@@ -206,6 +207,102 @@ sub resolve_options {
         exit 1;
     }
 }
+
+sub get_log_line {
+    my ($self, $file_info) = @_;
+    my $fh = $file_info->{fh};
+    unless ($fh) { die "Read on closed fh $filename.\n" }
+    $file_info->{current_line}{line} = <$fh>;
+    $self->classify_line ($file_info);
+};
+
+
+sub grouping_time {
+    my ($self, $dt) = @_;
+    my $granularity = $self->{granularity};
+    if      ($granularity eq 'minutes') {
+        substr ($dt, 0, 17) . '00'
+    } elsif ($granularity eq 'hours') {
+        substr ($dt, 0, 14) . '00:00'
+    } elsif ($granularity eq 'ten-minutes') {
+        substr ($dt, 0, 15) . '0:00'
+    } else {
+        # seconds, or unknown
+        $dt
+    }
+}
+
+
+sub app_code {
+    my ($self, $text) = @_;
+    my $prefixes = $self->{prefixes};
+    foreach my $match ($text =~ /([A-Z]+)-([A-Z]+): /g) {
+        if (exists $prefixes->{$1}) {
+            return "$1-$2";
+        }
+    }
+    return ();
+}
+
+
+sub classify_line {
+    my ($self, $file_info) = @_;
+
+    my $line = $file_info->{current_line}{line};
+
+    # quick out.  just work on this function.
+    if ($self->{junk} && $line =~ /$self->{junk}/) {
+        $file_info->{current_line}{events} = [{ classify => 'JUNK'}];
+        return;
+    }
+
+    if ($line =~ /^(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+) (\S+):\s(.*)/) {
+        # default
+        $file_info->{current_line}{events} = [{ classify => 'misc', 'op' => 'count' }];
+        my ($dt, $level, $text) = ($1, $2, $3);
+        $file_info->{date_time} = $dt;
+        my $grouping_time = $self->grouping_time ($dt);
+        @{$file_info->{current_line}}{'date_time', 'level', 'text', 'grouping_time'}
+            = ($dt, $level, $text, $grouping_time);
+        # count per level
+        $stats->{level_counts}{$level}++;
+        # ML codes
+        my $code = $self->app_code ($text);
+        if ($code) {
+            $file_info->{current_line}{events} = [{ classify => $code, 'op' => 'count' }];
+        } elsif ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
+            $file_info->{current_line}{events} = [
+                { classify => 'merge', op => 'sum', value => $1 },
+                { classify => 'merge-rate', op => 'avg', value => $2 },
+            ];
+        } elsif ($text =~ /^Hung (\d+) sec/) {
+            $file_info->{current_line}{events} = [{ classify => 'hung', op => 'sum', value => $1 }];
+        } elsif ($text =~ /^Mounted forest \S+ locally/) {
+            $file_info->{current_line}{events} = [{ classify => 'mount', op => 'count', }];
+        } elsif ($text =~ /^Starting MarkLogic Server /) {
+            $file_info->{current_line}{events} = [{ classify => 'restart', op => 'count', }];
+        }
+    } elsif (length ($line) > 0) {
+        $file_info->{current_line}{events} = [{ classify => 'sys', op => 'count', }];
+    }
+}
+
+sub init_files {
+    my ($self) = @_;
+# init stats, init fh
+    foreach my $filename (@{$self->{filenames}}) {
+        my $key = $self->get_logfile_key ($filename);
+        my $fh = undef;
+        open ($fh, '<', $filename) or die "Can't open $filename.\n";
+        my $file_info = {
+            'filename' => $filename,
+            'key' => $key,
+            'fh' => $fh,
+        };
+        push @{$self->{logfh}}, $file_info;
+        $self->get_log_line ($file_info);
+    }
+};
 
 sub usage {
   my ($self) = @_;
