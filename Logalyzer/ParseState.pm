@@ -232,6 +232,12 @@ Options:
 
         One of file or glob must be specified.
 
+    --namefrom
+        regex to match in filenames, to transform them to a key for stats.  (\$from in "\$key = \$filename; \$key =~ s/\$from/\$to/")
+
+    --nameto
+        rhs in sub, to transform filenames to a key for stats.  (\$to in "\$key = \$filename; \$key =~ s/\$from/\$to/")
+
     --outdir
         Output directory; default is ./logalyzer.out; will be created.
 
