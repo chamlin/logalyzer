@@ -118,13 +118,6 @@ sub current_file_stats {
     return $self->{stats}{$self->{current_file}};
 }
 
-# stats that will be dumped
-sub current_stats {
-    my ($self) = @_;
-    return $self->{stats}{$self->{current_file}}{stats};
-}
-
-
 sub end_run {
     my ($self) = @_;
     $self->{timer} = time() - $self->{started};
@@ -211,7 +204,9 @@ sub resolve_options {
 # get a line for fileinfo structure, classify it
 sub get_log_line {
     my ($self, $filename) = @_;
+print STDERR "< $filename\n";
     my $file_info = $self->{file_info}{$filename};
+    if ($file_info->{done}) { return }
     my $fh = $file_info->{fh};
     unless ($fh) { die "Read on closed fh $filename.\n" }
 
@@ -234,6 +229,7 @@ sub get_log_line {
             delete $file_info->{fh};
             $file_info->{done} = 1;
             $continue = 0;
+print STDERR "> $filename\n";
         }
     }
 };
@@ -254,6 +250,59 @@ sub grouping_time {
     }
 }
 
+sub process_files {
+    my ($self) = @_;
+    while (scalar @{$self->{logfh}}) { $self->process_line (); }
+}
+
+sub process_line {
+    my ($self) = @_;
+    
+    # go through fh array
+    my @not_done = ();
+    my $min = { date_time => '9999-99-99', done => 1 };
+    for (my $i = 0; $i <= $#{$self->{logfh}}; $i++) {
+        my $filefh = $self->{logfh}[$i];
+        if (! $filefh->{done}) { push @not_done, $filefh }
+        if ($filefh->{date_time} lt $min->{date_time}) {
+            $min = $filefh
+        }
+    }
+
+    # keep the ones not done
+    $self->{logfh} = \@not_done;
+
+    # use the line in the min
+    unless (exists $self->{stats}{$min->{key}})  { $self->{stats}{$min->{key}} = {} }
+    my $stats = $self->{stats}{$min->{key}};
+
+    my $line_info = $min->{current_line};
+
+print '(', scalar (@not_done), ')', Dumper $min;
+
+    foreach my $classify (@{$line_info->{events}}) {
+        my $event = $classify->{classify};
+        if ($event eq 'JUNK') { last }
+        my $op = $classify->{op};
+        if ($op eq 'sum') {
+            $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
+        } elsif ($op eq 'avg') {
+            push @{$stats->{$line_info->{grouping_time}}{$event}}, $classify->{value};
+        } else {
+            # default is count
+            if (exists $stats->{$line_info->{grouping_time}}{$event}) {
+                $stats->{$line_info->{grouping_time}}{$event}++;
+            } else {
+                $stats->{$line_info->{grouping_time}}{$event} = 1;
+            }
+        }
+        $state->{events_seen}{$event} = 1;
+        #dump_line ($state, $event);
+    }
+
+    # refresh the min
+    $self->get_log_line ($min->{filename});
+}
 
 sub app_code {
     my ($self, $text) = @_;
@@ -312,6 +361,8 @@ sub classify_line {
         }
     } elsif (length ($line) > 0) {
         $file_info->{current_line}{events} = [{ classify => 'sys', op => 'count', }];
+    } else {
+        # empty line?
     }
 }
 

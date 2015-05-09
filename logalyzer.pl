@@ -32,35 +32,16 @@ GetOptions (
 
 $state->resolve_options ();
 
-foreach my $filename (@{$state->{filenames}}) {
-    print STDERR "< $filename\n";
-    process_file ($filename, $state);
-}
+$state->process_files ();
 
-sort_files ($state);
+#dump_stats ($state);
 
-dump_stats ($state);
 
 $state->end_run;
 
 dump_state ($state);
 
 ############## subs
-
-# close out and sort the various output files.
-sub sort_files {
-    my ($state) = @_;
-    foreach my $filename (keys %{$state->{fh}}) {
-        # ok, let's try sys, since it will phony a time unless it's the very first line in the log file.
-        # if ($filename eq 'sys' || $filename =~ /\/sys$/) { next }
-        print STDERR "<  $filename\n";
-        $state->close_fh ($filename);
-        close $filename;
-        system "cat $filename | sort > $filename.tmp";
-        system "mv $filename.tmp $filename";
-        print STDERR " > $filename\n";
-    }
-};
 
 sub dump_stats {
     my ($state) = @_;
@@ -120,49 +101,6 @@ sub dump_state {
     print $dumper_fh (Dumper $state);
 }
 
-sub process_file {
-    my ($filename, $state) = @_;
-    $state->{current_file} = $filename;
-    $state->{stats}{$filename} = {
-        'level_counts' => {},
-        'stats' => {},
-    };
-    open (my $in, '<', $filename) or die "Can't open $filename.\n";
-    while ($state->{current_line}{line} = <$in>) {
-        classify_line ($state);
-        process_line ($state)
-    }
-    close $in;
-}
-
-sub process_line {
-    my ($state) = @_;
-    my $stats = $state->current_stats();
-
-    my $line_info = $state->current_line();
-    foreach my $classify (@{$line_info->{events}}) {
-        my $event = $classify->{classify};
-        # skip
-        if ($event eq 'JUNK') { return };
-        my $op = $classify->{op};
-        if ($op eq 'sum') {
-            $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
-        } elsif ($op eq 'avg') {
-            push @{$stats->{$line_info->{grouping_time}}{$event}}, $classify->{value};
-        } else {
-            # default is count
-            if (exists $stats->{$line_info->{grouping_time}}{$event}) {
-                $stats->{$line_info->{grouping_time}}{$event}++;
-            } else {
-                $stats->{$line_info->{grouping_time}}{$event} = 1;
-            }
-        }
-        $state->{events_seen}{$event} = 1;
-        dump_line ($state, $event);
-    }
-    $state->{last_line} = $state->{current_line};
-}
-
 sub dump_line {
     my ($state, $event) = @_;
     my $line_info = $state->{current_line};
@@ -184,74 +122,4 @@ sub dump_line {
     }
 }
 
-
-sub classify_line {
-    my ($state) = @_;
-    # current line info
-    my $line = $state->{current_line}{line};
-    # current file stats
-    my $stats = $state->current_file_stats();
-    # default
-
-    # quick out.  just work on this function.
-    if (defined $state->{junk} && $line =~ /$state->{junk}/) {
-        $state->{current_line}{events} = [{ classify => 'JUNK'}];
-        return;
-    }
-
-    if ($line =~ /^(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+) (\S+):\s(.*)/) {
-        # default
-        $state->{current_line}{events} = [{ classify => 'misc', 'op' => 'count' }];
-        my ($dt, $level, $text) = ($1, $2, $3);
-        $state->{date_time} = $dt;
-        my $grouping_time = grouping_time ($dt, $state->{granularity});
-        @{$state->{current_line}}{'date_time', 'level', 'text', 'grouping_time'}
-            = ($dt, $level, $text, $grouping_time);
-        # count per level
-        $stats->{level_counts}{$level}++;
-        # ML codes
-        my $code = app_code ($text, $state->{prefixes});
-        if ($code) {
-            $state->{current_line}{events} = [{ classify => $code, 'op' => 'count' }];
-        } elsif ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
-            $state->{current_line}{events} = [
-                { classify => 'merge', op => 'sum', value => $1 },
-                { classify => 'merge-rate', op => 'avg', value => $2 },
-            ];
-        } elsif ($text =~ /^Hung (\d+) sec/) {
-            $state->{current_line}{events} = [{ classify => 'hung', op => 'sum', value => $1 }];
-        } elsif ($text =~ /^Mounted forest \S+ locally/) {
-            $state->{current_line}{events} = [{ classify => 'mount', op => 'count', }];
-        } elsif ($text =~ /^Starting MarkLogic Server /) {
-            $state->{current_line}{events} = [{ classify => 'restart', op => 'count', }];
-        }
-    } elsif (length ($line) > 0) {
-        $state->{current_line}{events} = [{ classify => 'sys', op => 'count', }];
-    }
-}
-
-sub app_code {
-    my ($text, $prefixes) = @_;
-    foreach my $match ($text =~ /([A-Z]+)-([A-Z]+): /g) {
-        if (exists $prefixes->{$1}) {
-            return "$1-$2";
-        }
-    }
-    return ();
-}
-
-
-sub grouping_time {
-    my ($dt, $granularity) = @_;
-    if      ($granularity eq 'minutes') {
-        substr ($dt, 0, 17) . '00'
-    } elsif ($granularity eq 'hours') {
-        substr ($dt, 0, 14) . '00:00'
-    } elsif ($granularity eq 'ten-minutes') {
-        substr ($dt, 0, 15) . '0:00'
-    } else {
-        # seconds, or unknown
-        $dt
-    }
-}
 
