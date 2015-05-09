@@ -217,13 +217,13 @@ sub get_log_line {
 
     my $continue = 1;
     while ($continue) {
-        # eventually, multiline events
+        # TODO eventually, multiline events
         my $line = <$fh>;
         $file_info->{lines_read}++;
         if (defined ($line)) {
             $file_info->{current_line}{line} = $line;
             $self->classify_line ($file_info);
-            # get out when you don't have junk
+            # get out when you don't have junk, otherwise continue
             if ($file_info->{current_line}{events}[0]{classify} ne 'JUNK') {
                 $continue = 0;
             }    
@@ -232,7 +232,7 @@ sub get_log_line {
             $file_info->{current_line}{line} = undef;
             close $file_info->{fh};
             delete $file_info->{fh};
-            $file_info->{empty} = 1;
+            $file_info->{done} = 1;
             $continue = 0;
         }
     }
@@ -258,12 +258,13 @@ sub grouping_time {
 sub app_code {
     my ($self, $text) = @_;
     my $prefixes = $self->{prefixes};
+    my @codes = ();
     foreach my $match ($text =~ /([A-Z]+)-([A-Z]+): /g) {
         if (exists $prefixes->{$1}) {
-            return "$1-$2";
+            push @codes, "$1-$2";
         }
     }
-    return ();
+    return @codes;
 }
 
 
@@ -279,8 +280,6 @@ sub classify_line {
     }
 
     if ($line =~ /^(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+) (\S+):\s(.*)/) {
-        # default
-        $file_info->{current_line}{events} = [{ classify => 'misc', 'op' => 'count' }];
         my ($dt, $level, $text) = ($1, $2, $3);
         $file_info->{date_time} = $dt;
         my $grouping_time = $self->grouping_time ($dt);
@@ -288,21 +287,28 @@ sub classify_line {
             = ($dt, $level, $text, $grouping_time);
         # count per level
         $stats->{level_counts}{$level}++;
+        $file_info->{current_line}{events} = [];
+        my $events = $file_info->{current_line}{events};
         # ML codes
-        my $code = $self->app_code ($text);
-        if ($code) {
-            $file_info->{current_line}{events} = [{ classify => $code, 'op' => 'count' }];
-        } elsif ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
-            $file_info->{current_line}{events} = [
+        foreach my $code ($self->app_code ($text)) {
+            push @$events, { classify => $code, 'op' => 'count' };
+        }
+        # other stuff
+        if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
+            push @$events, (
                 { classify => 'merge', op => 'sum', value => $1 },
                 { classify => 'merge-rate', op => 'avg', value => $2 },
-            ];
+            );
         } elsif ($text =~ /^Hung (\d+) sec/) {
-            $file_info->{current_line}{events} = [{ classify => 'hung', op => 'sum', value => $1 }];
+            push @$events, { classify => 'hung', op => 'sum', value => $1 };
         } elsif ($text =~ /^Mounted forest \S+ locally/) {
-            $file_info->{current_line}{events} = [{ classify => 'mount', op => 'count', }];
+            push @$events, { classify => 'mount', op => 'count', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
-            $file_info->{current_line}{events} = [{ classify => 'restart', op => 'count', }];
+            push @$events, { classify => 'restart', op => 'count', };
+        }
+        # default
+        unless (scalar @$events) {
+            $file_info->{current_line}{events} = [{ classify => 'misc', 'op' => 'count' }];
         }
     } elsif (length ($line) > 0) {
         $file_info->{current_line}{events} = [{ classify => 'sys', op => 'count', }];
