@@ -94,32 +94,3 @@ sub get_stats_filename {
     return $state->{outdir} . '/stats-' . $filename . '.out';
 }
 
-sub dump_state {
-    my ($state) = @_;
-    my $dumper_filename = $state;
-    my $dumper_fh = $state->get_fh ($state->{outdir} . '/Dumper.out');
-    print $dumper_fh (Dumper $state);
-}
-
-sub dump_line {
-    my ($state, $event) = @_;
-    my $line_info = $state->{current_line};
-    my $outfile = $state->{outdir} . '/' . $event;
-    # file is outdir/log-as
-    # line is time line (logfile)
-    my $event_fh = $state->get_fh ($outfile);
-    my $to_print = join ("\t", (
-        (exists $line_info->{date_time} ? $line_info->{date_time} : join ('', $state->{last_date_time}, '+')),
-        $state->{current_file},
-        $line_info->{line},
-    ));
-    print $event_fh $to_print;
-    # print level-based logging
-    if (exists $line_info->{level} && $state->{levels}{$line_info->{level}} >= $state->{min_level_number}) {
-        $outfile = "$state->{outdir}/level-$line_info->{level}";
-        $event_fh = $state->get_fh ($outfile);
-        print $event_fh $to_print;
-    }
-}
-
-

@@ -421,6 +421,13 @@ sub init_files {
     }
 };
 
+sub dump_state {
+    my ($self) = @_;
+    my $dumper_filename = $self;
+    my $dumper_fh = $self->get_fh ($self->{outdir} . '/Dumper.out');
+    print $dumper_fh (Dumper $self);
+}
+
 sub usage {
   my ($self) = @_;
 
