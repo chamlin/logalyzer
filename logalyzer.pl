@@ -39,7 +39,7 @@ $state->process_files ();
 
 $state->end_run;
 
-dump_state ($state);
+$state->dump_state;
 
 ############## subs
 

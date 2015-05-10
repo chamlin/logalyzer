@@ -315,16 +315,16 @@ sub dump_line {
     my $line_info = $logfh->{current_line};
     if ($line_info->{done}) { return }
     my $date_time = $line_info->{date_time} ? $line_info->{date_time} : $logfh->{last_date_time};
+    my $to_print = join ("\t", (
+        $date_time,
+        $logfh->{filename},
+        $line_info->{line},
+    ));
     foreach my $event (@{$line_info->{events}}) {
         my $outfile = $state->{outdir} . '/' . $event->{classify};
         # file is outdir/log-as
         # line is time line (logfile)
         my $event_fh = $state->get_fh ($outfile);
-        my $to_print = join ("\t", (
-            $date_time,
-            $logfh->{filename},
-            $line_info->{line},
-        ));
         print $event_fh $to_print;
     }
     # print level-based logging
@@ -339,7 +339,7 @@ sub app_code {
     my ($self, $text) = @_;
     my $prefixes = $self->{prefixes};
     my @codes = ();
-    foreach my $match ($text =~ /([A-Z]+)-([A-Z]+): /g) {
+    while ($text =~ /([A-Z]+|X509)-([A-Z]+): /g) {
         if (exists $prefixes->{$1}) {
             push @codes, "$1-$2";
         }
