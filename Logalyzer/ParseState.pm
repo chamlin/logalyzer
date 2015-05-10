@@ -204,7 +204,7 @@ sub resolve_options {
 # get a line for fileinfo structure, classify it
 sub get_log_line {
     my ($self, $filename) = @_;
-print STDERR "< $filename\n";
+print STDERR "<gl $filename\n";
     my $file_info = $self->{file_info}{$filename};
     if ($file_info->{done}) { return }
     my $fh = $file_info->{fh};
@@ -229,7 +229,7 @@ print STDERR "< $filename\n";
             delete $file_info->{fh};
             $file_info->{done} = 1;
             $continue = 0;
-print STDERR "> $filename\n";
+print STDERR ">gl $filename\n";
         }
     }
 };
@@ -263,14 +263,18 @@ sub process_line {
     my $min = { date_time => '9999-99-99', done => 1 };
     for (my $i = 0; $i <= $#{$self->{logfh}}; $i++) {
         my $filefh = $self->{logfh}[$i];
-        if (! $filefh->{done}) { push @not_done, $filefh }
-        if ($filefh->{date_time} lt $min->{date_time}) {
-            $min = $filefh
+        if (! $filefh->{done}) {
+            push @not_done, $filefh;
+            if ($filefh->{date_time} lt $min->{date_time}) {
+                $min = $filefh
+            }
         }
     }
 
     # keep the ones not done
     $self->{logfh} = \@not_done;
+
+    if ($min->{done}) { return }
 
     # use the line in the min
     unless (exists $self->{stats}{$min->{key}})  { $self->{stats}{$min->{key}} = {} }
@@ -278,7 +282,7 @@ sub process_line {
 
     my $line_info = $min->{current_line};
 
-print '(', scalar (@not_done), ')', Dumper $min;
+print STDERR '(', scalar (@not_done), ')', Dumper $min;
 
     foreach my $classify (@{$line_info->{events}}) {
         my $event = $classify->{classify};
@@ -300,8 +304,35 @@ print '(', scalar (@not_done), ')', Dumper $min;
         #dump_line ($state, $event);
     }
 
+    $self->dump_line ($min);
+
     # refresh the min
     $self->get_log_line ($min->{filename});
+}
+
+sub dump_line {
+    my ($state, $logfh) = @_;
+    my $line_info = $logfh->{current_line};
+    if ($line_info->{done}) { return }
+    my $date_time = $line_info->{date_time} ? $line_info->{date_time} : $logfh->{last_date_time};
+    foreach my $event (@{$line_info->{events}}) {
+        my $outfile = $state->{outdir} . '/' . $event->{classify};
+        # file is outdir/log-as
+        # line is time line (logfile)
+        my $event_fh = $state->get_fh ($outfile);
+        my $to_print = join ("\t", (
+            $date_time,
+            $logfh->{filename},
+            $line_info->{line},
+        ));
+        print $event_fh $to_print;
+    }
+    # print level-based logging
+    if (exists $line_info->{level} && $state->{levels}{$line_info->{level}} >= $state->{min_level_number}) {
+        $outfile = "$state->{outdir}/level-$line_info->{level}";
+        $event_fh = $state->get_fh ($outfile);
+        print $event_fh $to_print;
+    }
 }
 
 sub app_code {
@@ -321,6 +352,10 @@ sub classify_line {
     my ($self, $file_info) = @_;
 
     my $line = $file_info->{current_line}{line};
+
+    if (exists $line->{date_time}) {
+        $file_info->{last_date_time} = $line->{date_time};
+    }
 
     # quick out.  just work on this function.
     if ($self->{junk} && $line =~ /$self->{junk}/) {
