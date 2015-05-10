@@ -204,7 +204,6 @@ sub resolve_options {
 # get a line for fileinfo structure, classify it
 sub get_log_line {
     my ($self, $filename) = @_;
-print STDERR "<gl $filename\n";
     my $file_info = $self->{file_info}{$filename};
     if ($file_info->{done}) { return }
     my $fh = $file_info->{fh};
@@ -229,7 +228,6 @@ print STDERR "<gl $filename\n";
             delete $file_info->{fh};
             $file_info->{done} = 1;
             $continue = 0;
-print STDERR ">gl $filename\n";
         }
     }
 };
@@ -281,8 +279,6 @@ sub process_line {
     my $stats = $self->{stats}{$min->{key}};
 
     my $line_info = $min->{current_line};
-
-print STDERR '(', scalar (@not_done), ')', Dumper $min;
 
     foreach my $classify (@{$line_info->{events}}) {
         my $event = $classify->{classify};
@@ -408,6 +404,7 @@ sub init_files {
         my $key = $self->get_logfile_key ($filename);
         my $fh = undef;
         open ($fh, '<', $filename) or die "Can't open $filename.\n";
+        print STDERR '< ', $filename, "\n";
         my $file_info = {
             'filename' => $filename,
             'key' => $key,
