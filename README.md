@@ -15,13 +15,12 @@ Run, options will be shown.
 
 # status
 
-almost ready to use.
+useable
 
 # todo
 
   - use sar stuff
   - R plots
-  - time slices
   - day granularity?  or multiple-hours?
   - event read as more than a single line
 
