@@ -26,6 +26,8 @@ GetOptions (
     'testconfig' => \$state->{testconfig},
     'namefrom=s' => \$state->{namefrom},
     'nameto=s' => \$state->{nameto},
+    'mintime=s' => \$state->{min_time},
+    'maxtime=s' => \$state->{max_time},
     #'min_level=s' => \$state{min_level},
     #'stats_out=s' => \$state{stats_out},
 );

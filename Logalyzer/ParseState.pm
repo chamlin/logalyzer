@@ -87,6 +87,8 @@ sub new {
         'fn' => {},
         'stats' => {},
         'started' => time(),
+        'min_time' => undef,
+        'max_time' => undef,
     };
     return bless $blank, $class;
 }
@@ -217,10 +219,16 @@ sub get_log_line {
         if (defined ($line)) {
             $file_info->{current_line}{line} = $line;
             $self->classify_line ($file_info);
-            # get out when you don't have junk, otherwise continue
-            if ($file_info->{current_line}{events}[0]{classify} ne 'JUNK') {
+            # stop if final (over max time) and  get out when you don't have junk, otherwise continue
+            if ($file_info->{current_line}{events}[0]{classify} eq '_FINAL_') {
+                $file_info->{current_line}{line} = undef;
+                close $file_info->{fh};
+                delete $file_info->{fh};
+                $file_info->{done} = 1;
                 $continue = 0;
-            }    
+            } elsif ($file_info->{current_line}{events}[0]{classify} ne '_JUNK_') {
+                $continue = 0;
+            }
         } else {
             # eof
             $file_info->{current_line}{line} = undef;
@@ -282,7 +290,7 @@ sub process_line {
 
     foreach my $classify (@{$line_info->{events}}) {
         my $event = $classify->{classify};
-        if ($event eq 'JUNK') { last }
+        if ($event eq '_JUNK_') { last }
         my $op = $classify->{op};
         if ($op eq 'sum') {
             $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
@@ -355,13 +363,22 @@ sub classify_line {
 
     # quick out.  just work on this function.
     if ($self->{junk} && $line =~ /$self->{junk}/) {
-        $file_info->{current_line}{events} = [{ classify => 'JUNK'}];
+        $file_info->{current_line}{events} = [{ classify => '_JUNK_'}];
         return;
     }
 
     if ($line =~ /^(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+) (\S+):\s(.*)/) {
         my ($dt, $level, $text) = ($1, $2, $3);
         $file_info->{date_time} = $dt;
+        if    ($self->{min_time} && ($self->{min_time} gt $dt)) {
+            # ignore if too early
+            $file_info->{current_line}{events} = [{ classify => '_JUNK_'}];
+            return;
+        } elsif ($self->{max_time} && ($self->{max_time} le $dt)) {
+            # stop if too late
+            $file_info->{current_line}{events} = [{ classify => '_FINAL_'}];
+            return;
+        }
         my $grouping_time = $self->grouping_time ($dt);
         @{$file_info->{current_line}}{'date_time', 'level', 'text', 'grouping_time'}
             = ($dt, $level, $text, $grouping_time);
@@ -449,6 +466,12 @@ Options:
         XXX is a glob pattern.  For example, --glob "Err*.txt"  will select all ErrorLogs in the current directory.
 
         One of file or glob must be specified.
+
+    --mintime
+        timestamps lexically greater than or equal to this are retained (e.g., --mintime '2015-04-12 12:00:00')
+
+    --maxtime
+        timestamps lexically less than this are retained (e.g., --maxtime '2015-04-12 13:00:00')
 
     --namefrom
         regex to match in filenames, to transform them to a key for stats.  (\$from in "\$key = \$filename; \$key =~ s/\$from/\$to/")
