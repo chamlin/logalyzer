@@ -36,63 +36,10 @@ $state->resolve_options ();
 
 $state->process_files ();
 
-#dump_stats ($state);
+$state->dump_stats ();
 
 
 $state->end_run;
 
 $state->dump_state;
-
-############## subs
-
-sub dump_stats {
-    my ($state) = @_;
-    # get all rows (timestamps), ordered
-    foreach my $filename (keys %{$state->{stats}}) {
-        foreach my $timestamp (keys %{$state->{stats}{$filename}{stats}}) {
-            $state->{timestamps}{$timestamp} = 1;
-        }
-    }
-    my @rows = sort keys %{$state->{timestamps}};
-    # get all columns (events)
-    my @columns = sort keys %{$state->{events_seen}};
-    foreach my $filename (keys %{$state->{stats}}) {
-        my $file_stats = $state->{stats}{$filename}{stats};
-        my $stats_filename = get_stats_filename ($state, $filename);
-        my $stats_fh = $state->get_fh ($stats_filename);
-        # header
-        print $stats_fh ("#timestamp\t", join ($state->{separator}, @columns), "\n");
-        foreach my $row (@rows) {
-            my @vals = ($row);
-            foreach my $column (@columns) {
-                if (defined $file_stats->{$row}{$column}) { 
-                    push @vals, get_stats_value ($state, $column, $file_stats->{$row}{$column});
-                } else {
-                    push @vals, 0;
-                }
-            }
-            print $stats_fh (join ($state->{separator}, @vals, "\n"));
-        }
-    }
-}
-
-sub get_stats_value {
-    my ($state, $event, $stats) = @_;
-    my $retval = $stats;
-    my $op = $state->event_op ($event);
-    if ($op eq 'avg') {
-        my $sum = 0;
-        foreach my $stat (@$stats) { $sum += $stat }
-        $retval = int ( ($sum / scalar (@$stats)) + 0.5 );
-    }
-    return $retval;
-};
-
-sub get_stats_filename {
-    my ($state, $filename) = @_;
-    # watch for directorys in filenames
-    $filename =~ s/^\.\///;
-    $filename =~ s/\//_/g;
-    return $state->{outdir} . '/stats-' . $filename . '.out';
-}
 

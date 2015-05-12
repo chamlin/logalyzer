@@ -114,11 +114,6 @@ sub close_fh {
     }
 }
 
-# stats that will be dumped, and also level counts, for current file
-sub current_file_stats {
-    my ($self) = @_;
-    return $self->{stats}{$self->{current_file}};
-}
 
 sub end_run {
     my ($self) = @_;
@@ -261,17 +256,20 @@ sub process_files {
     while (scalar @{$self->{logfh}}) { $self->process_line (); }
 }
 
+my $min_fh = { current_line => { date_time => '9999-99-99'}, done => 1 };
+
 sub process_line {
     my ($self) = @_;
     
-    # go through fh array
+    # go through fh array, get min-time line
     my @not_done = ();
-    my $min = { date_time => '9999-99-99', done => 1 };
+    # phony baloney sentinel
+    my $min = $min_fh;
     for (my $i = 0; $i <= $#{$self->{logfh}}; $i++) {
         my $filefh = $self->{logfh}[$i];
         if (! $filefh->{done}) {
             push @not_done, $filefh;
-            if ($filefh->{date_time} lt $min->{date_time}) {
+            if ($filefh->{current_line}{date_time} lt $min->{current_line}{date_time}) {
                 $min = $filefh
             }
         }
@@ -283,14 +281,15 @@ sub process_line {
     if ($min->{done}) { return }
 
     # use the line in the min
-    unless (exists $self->{stats}{$min->{key}})  { $self->{stats}{$min->{key}} = {} }
-    my $stats = $self->{stats}{$min->{key}};
+    unless (exists $self->{stats}{$min->{key}}{stats})  { $self->{stats}{$min->{key}}{stats} = {} }
+    my $stats = $self->{stats}{$min->{key}}{stats};
 
     my $line_info = $min->{current_line};
 
     foreach my $classify (@{$line_info->{events}}) {
         my $event = $classify->{classify};
         if ($event eq '_JUNK_') { last }
+        $self->{events_seen}{$event} = 1;
         my $op = $classify->{op};
         if ($op eq 'sum') {
             $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
@@ -304,8 +303,6 @@ sub process_line {
                 $stats->{$line_info->{grouping_time}}{$event} = 1;
             }
         }
-        $state->{events_seen}{$event} = 1;
-        #dump_line ($state, $event);
     }
 
     $self->dump_line ($min);
@@ -315,26 +312,25 @@ sub process_line {
 }
 
 sub dump_line {
-    my ($state, $logfh) = @_;
+    my ($self, $logfh) = @_;
     my $line_info = $logfh->{current_line};
     if ($line_info->{done}) { return }
-    my $date_time = $line_info->{date_time} ? $line_info->{date_time} : $logfh->{last_date_time};
     my $to_print = join ("\t", (
-        $date_time,
+        $line_info->{date_time},
         $logfh->{filename},
         $line_info->{line},
     ));
     foreach my $event (@{$line_info->{events}}) {
-        my $outfile = $state->{outdir} . '/' . $event->{classify};
+        my $outfile = $self->{outdir} . '/' . $event->{classify};
         # file is outdir/log-as
         # line is time line (logfile)
-        my $event_fh = $state->get_fh ($outfile);
+        my $event_fh = $self->get_fh ($outfile);
         print $event_fh $to_print;
     }
     # print level-based logging
-    if (exists $line_info->{level} && $state->{levels}{$line_info->{level}} >= $state->{min_level_number}) {
-        $outfile = "$state->{outdir}/level-$line_info->{level}";
-        $event_fh = $state->get_fh ($outfile);
+    if (exists $line_info->{level} && $self->{levels}{$line_info->{level}} >= $self->{min_level_number}) {
+        $outfile = "$self->{outdir}/level-$line_info->{level}";
+        $event_fh = $self->get_fh ($outfile);
         print $event_fh $to_print;
     }
 }
@@ -355,37 +351,39 @@ sub app_code {
 sub classify_line {
     my ($self, $file_info) = @_;
 
-    my $line = $file_info->{current_line}{line};
+    my $line_info = $file_info->{current_line};
+    my $line = $line_info->{line};
 
-    if (exists $line->{date_time}) {
-        $file_info->{last_date_time} = $line->{date_time};
-    }
+    # for default
+    $line_info->{date_time} = $file_info->{date_time};
+    $line_info->{grouping_time} = $file_info->{grouping_time};
 
     # quick out.  just work on this function.
     if ($self->{junk} && $line =~ /$self->{junk}/) {
-        $file_info->{current_line}{events} = [{ classify => '_JUNK_'}];
+        $line_info->{events} = [{ classify => '_JUNK_'}];
         return;
     }
 
     if ($line =~ /^(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+) (\S+):\s(.*)/) {
         my ($dt, $level, $text) = ($1, $2, $3);
-        $file_info->{date_time} = $dt;
         if    ($self->{min_time} && ($self->{min_time} gt $dt)) {
             # ignore if too early
-            $file_info->{current_line}{events} = [{ classify => '_JUNK_'}];
+            $line_info->{events} = [{ classify => '_JUNK_'}];
             return;
         } elsif ($self->{max_time} && ($self->{max_time} le $dt)) {
             # stop if too late
-            $file_info->{current_line}{events} = [{ classify => '_FINAL_'}];
+            $line_info->{events} = [{ classify => '_FINAL_'}];
             return;
         }
         my $grouping_time = $self->grouping_time ($dt);
-        @{$file_info->{current_line}}{'date_time', 'level', 'text', 'grouping_time'}
+        @{$line_info}{'date_time', 'level', 'text', 'grouping_time'}
             = ($dt, $level, $text, $grouping_time);
+        $file_info->{date_time} = $dt;
+        $file_info->{grouping_time} = $grouping_time;
         # count per level
         $stats->{level_counts}{$level}++;
-        $file_info->{current_line}{events} = [];
-        my $events = $file_info->{current_line}{events};
+        $line_info->{events} = [];
+        my $events = $line_info->{events};
         # ML codes
         foreach my $code ($self->app_code ($text)) {
             push @$events, { classify => $code, 'op' => 'count' };
@@ -405,10 +403,10 @@ sub classify_line {
         }
         # default
         unless (scalar @$events) {
-            $file_info->{current_line}{events} = [{ classify => 'misc', 'op' => 'count' }];
+            $line_info->{events} = [{ classify => 'misc', 'op' => 'count' }];
         }
     } elsif (length ($line) > 0) {
-        $file_info->{current_line}{events} = [{ classify => 'sys', op => 'count', }];
+        $line_info->{events} = [{ classify => 'sys', op => 'count', }];
     } else {
         # empty line?
     }
@@ -427,6 +425,8 @@ sub init_files {
             'key' => $key,
             'fh' => $fh,
             'lines_read' => 0,
+            'date_time' => '1900-01-01 00:00:00',
+            'grouping_time' => $self-> grouping_time ('1900-01-01 00:00:00'),
         };
         $self->{file_info}{$filename} = $file_info;
         # read list, removed when done
@@ -441,6 +441,60 @@ sub dump_state {
     my $dumper_fh = $self->get_fh ($self->{outdir} . '/Dumper.out');
     print $dumper_fh (Dumper $self);
 }
+
+#### stats
+
+sub dump_stats {
+    my ($self) = @_;
+    # get all rows (timestamps), ordered
+    foreach my $filename (keys %{$self->{stats}}) {
+        foreach my $timestamp (keys %{$self->{stats}{$filename}{stats}}) {
+            $self->{timestamps}{$timestamp} = 1;
+        }
+    }
+    my @rows = sort keys %{$self->{timestamps}};
+    # get all columns (events)
+    my @columns = sort keys %{$self->{events_seen}};
+    foreach my $filename (keys %{$self->{stats}}) {
+        my $file_stats = $self->{stats}{$filename}{stats};
+        my $stats_filename = $self->get_stats_filename ($filename);
+        my $stats_fh = $self->get_fh ($stats_filename);
+        # header
+        print $stats_fh ("#timestamp\t", join ($self->{separator}, @columns), "\n");
+        foreach my $row (@rows) {
+            my @vals = ($row);
+            foreach my $column (@columns) {
+                if (defined $file_stats->{$row}{$column}) { 
+                    push @vals, $self->get_stats_value ($column, $file_stats->{$row}{$column});
+                } else {
+                    push @vals, 0;
+                }
+            }
+            print $stats_fh (join ($self->{separator}, @vals, "\n"));
+        }
+    }
+}
+
+sub get_stats_value {
+    my ($self, $event, $stats) = @_;
+    my $retval = $stats;
+    my $op = $self->event_op ($event);
+    if ($op eq 'avg') {
+        my $sum = 0;
+        foreach my $stat (@$stats) { $sum += $stat }
+        $retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+    }
+    return $retval;
+};
+
+sub get_stats_filename {
+    my ($self, $filename) = @_;
+    # watch for directorys in filenames
+    $filename =~ s/^\.\///;
+    $filename =~ s/\//_/g;
+    return $self->{outdir} . '/stats-' . $filename . '.out';
+}
+
 
 sub usage {
   my ($self) = @_;
