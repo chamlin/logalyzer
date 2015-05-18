@@ -15,18 +15,6 @@ Run, options will be shown.
 
 # status
 
-useable, need to redo status output.
-
-# todo
-
-  - redo the stats output for multifile reads
-
-  - faster with classification doing quick word checks?
-  - R plots
-  - use sar stuff
-  - day granularity?  or multiple-hours?
-  - event read as more than a single line
-
-  - document:  adding extra events and stats operators
+useable
 
 
