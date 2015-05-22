@@ -1,6 +1,4 @@
-#!/opt/local/bin/perl -w
-
-# $Id: logalyzer.pl 28 2015-04-07 17:54:54Z chamlin $
+#!/usr/bin/perl -w
 
 # separator
 # usage
