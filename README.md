@@ -17,7 +17,7 @@ Goal:  decent, fast.
 
 Requires only basic install.
 
-Run, and options will be shown.
+Run logalyzer.pl and options will be shown.
 
 ### plots
 
