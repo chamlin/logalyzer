@@ -183,7 +183,7 @@ sub resolve_options {
     $self->{min_level_number} = $self->{levels}{$self->{min_level}};
     my $granularity = $self->{granularity};
     if ($granularity eq 'none') {
-        $self->{granularity} = 'hours'
+        $self->{granularity} = 'minutes'
     } else {
         unless ($self->{legal_granularities}{$granularity}) {
             my $s = "$granularity not legal granularity (legal: " . join (', ', (keys %{$self->{legal_granularities}})) . ").\n";
@@ -241,10 +241,12 @@ sub grouping_time {
     my $granularity = $self->{granularity};
     if      ($granularity eq 'minutes') {
         substr ($dt, 0, 17) . '00'
-    } elsif ($granularity eq 'hours') {
-        substr ($dt, 0, 14) . '00:00'
     } elsif ($granularity eq 'ten-minutes') {
         substr ($dt, 0, 15) . '0:00'
+    } elsif ($granularity eq 'hours') {
+        substr ($dt, 0, 14) . '00:00'
+    } elsif ($granularity eq 'days') {
+        substr ($dt, 0, 12) . '00:00:00'
     } else {
         # seconds, or unknown
         $dt
@@ -537,7 +539,7 @@ Options:
         Output directory; default is ./logalyzer.out; will be created.
 
     --granularity
-        granularity of the time-related stats.  Default is hours.
+        granularity of the time-related stats.  Default is minutes.
         Legal:  $legal_granularities.
 
 
