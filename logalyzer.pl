@@ -35,7 +35,7 @@ $state->resolve_options ();
 $state->process_files ();
 
 $state->dump_stats ();
-
+$state->dump_stats_new ();
 
 $state->end_run;
 

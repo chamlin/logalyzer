@@ -152,6 +152,7 @@ sub get_logfile_key {
     return $back;
 }
 
+# get options, set up config
 sub resolve_options {
     my ($self) = @_;
 
@@ -291,7 +292,7 @@ sub process_line {
     foreach my $classify (@{$line_info->{events}}) {
         my $event = $classify->{classify};
         if ($event eq '_JUNK_') { last }
-        $self->{events_seen}{$event} = 1;
+        $self->{events_seen}{$event} += 1;
         my $op = $classify->{op};
         if ($op eq 'sum') {
             $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
@@ -313,6 +314,7 @@ sub process_line {
     $self->get_log_line ($min->{filename});
 }
 
+# print line out
 sub dump_line {
     my ($self, $logfh) = @_;
     my $line_info = $logfh->{current_line};
@@ -446,6 +448,53 @@ sub dump_state {
 
 #### stats
 
+sub dump_stats_new {
+    my ($self) = @_;
+
+    open ($out, '>', 'foo');
+
+    my %all = ();
+    $self->{all} = \%all;
+    # file as timestamp, node, event, value(s)
+    foreach my $key (keys %{$self->{stats}}) {
+        $self->{keys}{$key}++;
+        foreach my $timestamp (keys %{$self->{stats}{$key}{stats}}) {
+            $self->{timestamps}{$timestamp} = 1;
+            $all{$timestamp}{$key} = $self->{stats}{$key}{stats}{$timestamp};
+        }
+    }
+
+    # get all columns (events)
+    my @columns = sort keys %{$self->{events_seen}};
+
+    # header
+# TODO - separator
+    print $out ("timestamp\tsource\t", join ($self->{separator}, @columns), "\n");
+
+    foreach my $timestamp (sort keys %{$self->{timestamps}}) {
+        foreach my $key (sort keys %{$self->{keys}}) {
+
+            my @vals = ($timestamp, $key);
+
+            my $stats = $self->{all}{$timestamp}{$key};
+
+            foreach my $column (@columns) {
+
+                if (defined $stats->{$column}) { 
+                    push @vals, $self->get_stats_value ($column, $stats->{$column});
+                } else {
+                    push @vals, '0';
+                }
+            }
+
+
+{ print STDERR "row: @vals\n"; }
+
+            print $out (join ($self->{separator}, @vals), "\n");
+        }
+    }
+}
+
 sub dump_stats {
     my ($self) = @_;
     # get all rows (timestamps), ordered
@@ -454,6 +503,7 @@ sub dump_stats {
             $self->{timestamps}{$timestamp} = 1;
         }
     }
+
     my @rows = sort keys %{$self->{timestamps}};
     # get all columns (events)
     my @columns = sort keys %{$self->{events_seen}};
@@ -475,6 +525,8 @@ sub dump_stats {
             print $stats_fh (join ($self->{separator}, @vals, "\n"));
         }
     }
+
+# my $op = $self->event_op ($event);
 }
 
 sub get_stats_value {
