@@ -10,6 +10,7 @@ my $state = new Logalyzer::ParseState();
 
 opendir my $DIR, '.';
 my @stats = grep { /^stats-.+out$/ } readdir $DIR;
+#my @stats = grep { /\.tsv$/ } readdir $DIR;
 closedir $DIR;
 
 if ((scalar @stats) < 1) { die "no files found.\n" }
