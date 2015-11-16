@@ -398,10 +398,28 @@ sub classify_line {
                 { classify => 'merge', op => 'sum', value => $1 },
                 { classify => 'merge-rate', op => 'avg', value => $2 },
             );
+        } elsif ($text =~ /^Deleted (\d+) MB in \d+ sec at (\d+) MB/) {
+            push @$events, (
+                { classify => 'delete', op => 'sum', value => $1 },
+                { classify => 'delete-rate', op => 'avg', value => $2 },
+            );
+        } elsif ($text =~ /^Saved (\d+) MB in \d+ sec at (\d+) MB/) {
+            push @$events, (
+                { classify => 'save', op => 'sum', value => $1 },
+                { classify => 'save-rate', op => 'avg', value => $2 },
+            );
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
         } elsif ($text =~ /^Mounted forest \S+ locally/) {
             push @$events, { classify => 'mount', op => 'count', };
+        } elsif ($text =~ /^Merging /) {
+            push @$events, { classify => 'merging', op => 'count', };
+        } elsif ($text =~ /^Saving /) {
+            push @$events, { classify => 'saving', op => 'count', };
+        } elsif ($text =~ /^Detecting (indexes|compatability) for database/) {
+            push @$events, { classify => 'detecting', op => 'count', };
+        } elsif ($text =~ /^Retrying /) {
+            push @$events, { classify => 'retry', op => 'count', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
