@@ -60,6 +60,8 @@ my $_levels = {
 my $_event_info = {
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     hung => { op => 'sum',  label => 'total (s)' },
     default => { op => 'count',  label => 'count' },
 };
@@ -392,6 +394,8 @@ sub classify_line {
         foreach my $code ($self->app_code ($text)) {
             push @$events, { classify => $code, 'op' => 'count' };
         }
+        # levels
+        push @$events, { classify => $level, op => 'count', value => 1 };
         # other stuff
         if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
             push @$events, (
@@ -469,7 +473,8 @@ sub dump_state {
 sub dump_stats_new {
     my ($self) = @_;
 
-    open ($out, '>', 'foo');
+    my $outfile = $self->{outdir} . '/' . 'stats-all';
+    my $stats_fh = $self->get_fh ($outfile);
 
     my %all = ();
     $self->{all} = \%all;
@@ -486,8 +491,7 @@ sub dump_stats_new {
     my @columns = sort keys %{$self->{events_seen}};
 
     # header
-# TODO - separator
-    print $out ("timestamp\tsource\t", join ($self->{separator}, @columns), "\n");
+    print $stats_fh ("timestamp\tsource\t", join ($self->{separator}, @columns), "\n");
 
     foreach my $timestamp (sort keys %{$self->{timestamps}}) {
         foreach my $key (sort keys %{$self->{keys}}) {
@@ -505,10 +509,7 @@ sub dump_stats_new {
                 }
             }
 
-
-{ print STDERR "row: @vals\n"; }
-
-            print $out (join ($self->{separator}, @vals), "\n");
+            print $stats_fh (join ($self->{separator}, @vals), "\n");
         }
     }
 }
