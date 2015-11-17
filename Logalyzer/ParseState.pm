@@ -160,6 +160,8 @@ sub resolve_options {
 
     my $exit_with_usage = 0;
 
+    $self->{min_level_number} = $self->{levels}{$self->{min_level}};
+
     # check files in
     if   ($self->{glob}) { $self->{filenames} = [grep { -f } glob ($self->{glob}) ]}
     elsif ($self->{file}) { $self->{filenames} = [grep { -f } (split (',', $self->{file}))] }
@@ -183,7 +185,6 @@ sub resolve_options {
     $self->{outdir} =~ s{/+$}{};
     unless (-d $self->{outdir}) { mkdir $self->{outdir} }
     unless (-d $self->{outdir}) { print STDERR "Can't find/make dir $self->{outdir}.\n"; $exit_with_usage = 1; }
-    $self->{min_level_number} = $self->{levels}{$self->{min_level}};
     my $granularity = $self->{granularity};
     if ($granularity eq 'none') {
         $self->{granularity} = 'minutes'
@@ -333,12 +334,6 @@ sub dump_line {
         my $event_fh = $self->get_fh ($outfile);
         print $event_fh $to_print;
     }
-    # print level-based logging
-    if (exists $line_info->{level} && $self->{levels}{$line_info->{level}} >= $self->{min_level_number}) {
-        $outfile = "$self->{outdir}/level-$line_info->{level}";
-        $event_fh = $self->get_fh ($outfile);
-        print $event_fh $to_print;
-    }
 }
 
 sub app_code {
@@ -395,7 +390,9 @@ sub classify_line {
             push @$events, { classify => $code, 'op' => 'count' };
         }
         # levels
-        push @$events, { classify => $level, op => 'count', value => 1 };
+        if ($self->{levels}{$level} >= $self->{min_level_number}) {
+            push @$events, { classify => $level, op => 'count', value => 1 };
+        }
         # other stuff
         if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
             push @$events, (
