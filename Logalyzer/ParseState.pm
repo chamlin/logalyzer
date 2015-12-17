@@ -148,8 +148,11 @@ sub get_logfile_key {
     my ($state, $filename) = @_;
     my $back = $filename;
     # watch for directorys in filenames
-    if ($state->{namefrom}) {
-        $back =~ s/$state->{namefrom}/$state->{nameto}/;
+    #if (exists $state->{namefrom}) {
+    if (1) {
+        my $from = $state->{namefrom};
+        my $to = exists $state->{nameto} ? $state->{nameto} : '';
+        $back =~ s/$from/$to/ee;
     }
     return $back;
 }
@@ -442,7 +445,7 @@ sub init_files {
         my $key = $self->get_logfile_key ($filename);
         my $fh = undef;
         open ($fh, '<', $filename) or die "Can't open $filename.\n";
-        print STDERR '< ', $filename, "\n";
+        print STDERR '< ', $filename, " (key: $key)\n";
         my $file_info = {
             'filename' => $filename,
             'key' => $key,
