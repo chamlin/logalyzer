@@ -47,6 +47,7 @@ for (my $i = 1; $i <= $#columns; $i++) {
     my @plots = ();
     for my $stats (@stats) {
         my $title = $stats;
+        $title =~ s/^stats-//;  $title =~ s/\.out$//;
         $title =~ s/_/\\_/g;
         push @plots, "'$stats' using 1:(\$$index == 0 ? NaN : \$$index)  title '$title'";
     }
