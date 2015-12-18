@@ -148,11 +148,10 @@ sub get_logfile_key {
     my ($state, $filename) = @_;
     my $back = $filename;
     # watch for directorys in filenames
-    #if (exists $state->{namefrom}) {
-    if (1) {
+    if ($state->{namefrom}) {
         my $from = $state->{namefrom};
-        my $to = exists $state->{nameto} ? $state->{nameto} : '';
-        $back =~ s/$from/$to/ee;
+        my $to = $state->{nameto};
+        if ($to =~ /\$\d/) { $back =~ s|$from|$to|ee } else { $back =~ s|$from|$to| }
     }
     return $back;
 }
@@ -327,7 +326,7 @@ sub dump_line {
     if ($line_info->{done}) { return }
     my $to_print = join ("\t", (
         $line_info->{date_time},
-        $logfh->{filename},
+        $logfh->{key},
         $line_info->{line},
     ));
     foreach my $event (@{$line_info->{events}}) {
@@ -396,6 +395,9 @@ sub classify_line {
         if ($self->{levels}{$level} >= $self->{min_level_number}) {
             push @$events, { classify => $level, op => 'count', value => 1 };
         }
+        if (index ($text, 'XDQP') >= 1) {
+            push @$events, { classify => 'XDQP', op => 'count', value => 1 };
+        }
         # other stuff
         if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
             push @$events, (
@@ -424,6 +426,8 @@ sub classify_line {
             push @$events, { classify => 'detecting', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
+        } elsif ($text =~ /^(Start|Finish).* backup/) {
+            push @$events, { classify => 'backup', op => 'count', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
