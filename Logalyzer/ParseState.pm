@@ -76,7 +76,7 @@ sub new {
         'filenames' => [],
         'min_level' => 'Notice',
         'granularity' => 'none',
-        'legal_granularities' => { minutes => 1, hours => 1, 'ten-minutes' => 1 },
+        'legal_granularities' => { minutes => 1, hours => 1, 'ten-minutes' => 1, 'seconds' => 1, 'days' => 1 },
         'separator' => "\t",
         'level-counts' => [],
         'levels' => $_levels,
@@ -245,14 +245,16 @@ sub get_log_line {
 sub grouping_time {
     my ($self, $dt) = @_;
     my $granularity = $self->{granularity};
-    if      ($granularity eq 'minutes') {
+    if      ($granularity eq 'seconds') {
+        substr ($dt, 0, 19)
+    } elsif ($granularity eq 'minutes') {
         substr ($dt, 0, 17) . '00'
     } elsif ($granularity eq 'ten-minutes') {
         substr ($dt, 0, 15) . '0:00'
     } elsif ($granularity eq 'hours') {
         substr ($dt, 0, 14) . '00:00'
     } elsif ($granularity eq 'days') {
-        substr ($dt, 0, 12) . '00:00:00'
+        substr ($dt, 0, 11) . '00:00:00'
     } else {
         # seconds, or unknown
         $dt
@@ -608,7 +610,7 @@ Options:
         regex to match in filenames, to transform them to a key for stats.  (\$from in "\$key = \$filename; \$key =~ s/\$from/\$to/")
 
     --nameto
-        rhs in sub, to transform filenames to a key for stats.  (\$to in "\$key = \$filename; \$key =~ s/\$from/\$to/")
+        rhs in sub, to transform filenames to a key for stats.  can capture in namefrom and insert in nameto.  (\$to in "\$key = \$filename; \$key =~ s/\$from/\$to/")
 
     --outdir
         Output directory; default is ./logalyzer.out; will be created.
