@@ -60,6 +60,7 @@ my $_levels = {
 my $_event_info = {
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     hung => { op => 'sum',  label => 'total (s)' },
