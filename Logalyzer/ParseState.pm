@@ -427,6 +427,8 @@ sub classify_line {
             push @$events, { classify => 'saving', op => 'count', };
         } elsif ($text =~ /^Detecting (indexes|compatability) for database/) {
             push @$events, { classify => 'detecting', op => 'count', };
+        } elsif ($text =~ /^New configuration state retrieved/) {
+            push @$events, { classify => 'config', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
         } elsif ($text =~ /^(Start|Finish).* backup/) {
@@ -451,7 +453,7 @@ sub init_files {
     foreach my $filename (@{$self->{filenames}}) {
         my $key = $self->get_logfile_key ($filename);
         my $fh = undef;
-        open ($fh, '<', $filename) or die "Can't open $filename.\n";
+        open ($fh, '<', $filename) or die "Can't open $filename ($!).\n";
         print STDERR '< ', $filename, " (key: $key)\n";
         my $file_info = {
             'filename' => $filename,
