@@ -145,6 +145,12 @@ sub event_op {
     return $self->{event_info}{default}{op};
 }
 
+sub get_logfile_keyxx {
+    my ($state, $filename) = @_;
+    $filename =~ /\/(.*?)_/;
+    return "node";
+}
+
 sub get_logfile_key {
     my ($state, $filename) = @_;
     my $back = $filename;
@@ -419,7 +425,9 @@ sub classify_line {
             );
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
-        } elsif ($text =~ /^Mounted forest \S+ locally/) {
+        } elsif ($text =~ /^Forest (\S+) state/) {
+            push @$events, { classify => 'forest-state', op => 'count', };
+        } elsif ($text =~ /^Mounted forest (\S+) locally/) {
             push @$events, { classify => 'mount', op => 'count', };
         } elsif ($text =~ /^Merging /) {
             push @$events, { classify => 'merging', op => 'count', };
@@ -431,10 +439,15 @@ sub classify_line {
             push @$events, { classify => 'config', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
-        } elsif ($text =~ /^(Start|Finish).* backup/) {
+        } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
+        }
+        if ($text =~ /orest (\S\S+)/) {
+            my $forest = $1;
+            $forest =~ s/:$//;
+            push @$events, { classify => "Forest-$forest", op => 'count', };
         }
         # default
         unless (scalar @$events) {
