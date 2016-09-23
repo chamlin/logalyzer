@@ -1,4 +1,4 @@
-#!/opt/local/bin/perl -w
+#!/usr/bin/perl -w
 
 use strict;
 
@@ -10,12 +10,13 @@ my $state = new Logalyzer::ParseState();
 
 opendir my $DIR, '.';
 my @stats = grep { /^stats-.+out$/ } readdir $DIR;
+#my @stats = grep { /\.tsv$/ } readdir $DIR;
 closedir $DIR;
 
 if ((scalar @stats) < 1) { die "no files found.\n" }
 
 # assume all same run, same columns
-open (my $in, '<', $stats[1]) or die "Can't open $stats[1].\n";
+open (my $in, '<', $stats[0]) or die "Can't open $stats[0].\n";
 my $line = <$in>;
 close ($in);
 
@@ -25,6 +26,7 @@ my @columns = split (/\t/, $line);
 unless ($#columns > 0) { @columns = split (/\s*,\s*/, $line) }
 
 for (my $i = 1; $i <= $#columns; $i++) {
+    print '.';
     my $index = $i + 1;
     my $col = $columns[$i];
     my $title = $col;
@@ -46,6 +48,7 @@ for (my $i = 1; $i <= $#columns; $i++) {
     my @plots = ();
     for my $stats (@stats) {
         my $title = $stats;
+        $title =~ s/^stats-//;  $title =~ s/\.out$//;
         $title =~ s/_/\\_/g;
         push @plots, "'$stats' using 1:(\$$index == 0 ? NaN : \$$index)  title '$title'";
     }
@@ -54,7 +57,7 @@ for (my $i = 1; $i <= $#columns; $i++) {
     system "gnuplot $filename";
 }
 
-print "@columns";
+print "\n@columns\n";
 
 
 
