@@ -147,8 +147,8 @@ sub event_op {
 
 sub get_logfile_keyxx {
     my ($state, $filename) = @_;
-    $filename =~ /\/(.*?)_/;
-    return "node";
+    $filename =~ /(node\d)/;
+    return $1;
 }
 
 sub get_logfile_key {
@@ -172,7 +172,11 @@ sub resolve_options {
     $self->{min_level_number} = $self->{levels}{$self->{min_level}};
 
     # check files in
-    if   ($self->{glob}) { $self->{filenames} = [grep { -f } glob ($self->{glob}) ]}
+    if   ($self->{glob}) {
+        foreach my $glob (split (/\s*,\s*/, $self->{glob})) {
+            push @{$self->{filenames}}, grep { -f } glob ($glob);
+        }
+    }
     elsif ($self->{file}) { $self->{filenames} = [grep { -f } (split (',', $self->{file}))] }
     else { }
     unless (scalar @{$self->{filenames}}) { print STDERR "No filenames provided/found.\n"; $exit_with_usage = 1; }
@@ -181,13 +185,13 @@ sub resolve_options {
         push @{$self->{filekeys}}, $self->get_logfile_key ($filename);
     }
 
-    $self->init_files();
-
     if ($self->{testconfig}) {
         $self->end_run;
         print STDERR "Config only: \n", Dumper $self;
         exit 1;
     }
+
+    $self->init_files();
 
     # dir out
     unless ($self->{outdir}) { $self->{outdir} = "logalyzer-out" }
@@ -407,6 +411,13 @@ sub classify_line {
         if (index ($text, 'XDQP') >= 1) {
             push @$events, { classify => 'XDQP', op => 'count', value => 1 };
         }
+        # cms
+        if ($text =~ /STARTING EVENT-INSERT/) {
+            push @$events, { classify => 'event-insert', op => 'count', value => 1 };
+        }
+        if ($text =~ /unable to configure logging/) {
+            push @$events, { classify => 'logging-configure', op => 'count', value => 1 };
+        }
         # other stuff
         if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
             push @$events, (
@@ -444,9 +455,12 @@ sub classify_line {
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
+        if ($text =~ /java.net.ConnectException/) {
+            push @$events, { classify => "java.net.ConnectException", op => 'count', };
+        }
         if ($text =~ /orest (\S\S+)/) {
             my $forest = $1;
-            $forest =~ s/:$//;
+            $forest =~ s/[:,;]$//;
             push @$events, { classify => "Forest-$forest", op => 'count', };
         }
         # default
@@ -614,6 +628,7 @@ Options:
     --glob XXX
         XXX is a glob pattern.  For example, --glob "Err*.txt"  will select all ErrorLogs in the current directory.
 
+        Multiple patterns can be given, separated by commas.
         One of file or glob must be specified.
 
     --mintime
