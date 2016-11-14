@@ -62,6 +62,7 @@ my $_event_info = {
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    save => { op => 'sum',  label => 'total (MB)' },
     'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     hung => { op => 'sum',  label => 'total (s)' },
     default => { op => 'count',  label => 'count' },
@@ -452,6 +453,8 @@ sub classify_line {
             push @$events, { classify => 'retry', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
+        } elsif ($text =~ /lags commit timestamp \((\d+)\)/) {
+            push @$events, { classify => 'timestamp-lag', op => 'avg', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
