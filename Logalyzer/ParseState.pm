@@ -58,6 +58,7 @@ my $_levels = {
 };
 
 my $_event_info = {
+    'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)' },
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
@@ -133,7 +134,7 @@ sub current_line {
 
 sub event_label { 
     my ($self, $event) = @_;
-    if (exists $self->{event_info}{$event}) {
+    if (exists $self->{event_info}{$event}{label}) {
         return $self->{event_info}{$event}{label};
     }
     return $self->{event_info}{default}{op};
@@ -141,10 +142,11 @@ sub event_label {
 
 sub event_op { 
     my ($self, $event) = @_;
-    if (exists $self->{event_info}{$event}) {
-        return $self->{event_info}{$event}{op};
+    my $op = $self->{event_info}{default}{op};
+    if (exists $self->{event_info}{$event}{op}) {
+        $op = $self->{event_info}{$event}{op};
     }
-    return $self->{event_info}{default}{op};
+    return $op;
 }
 
 sub get_logfile_keyxx {
@@ -281,6 +283,7 @@ sub process_files {
 
 my $min_fh = { current_line => { date_time => '9999-99-99'}, done => 1 };
 
+# get most recent line of all files, and process it (has already been classified).
 sub process_line {
     my ($self) = @_;
     
@@ -313,18 +316,21 @@ sub process_line {
         my $event = $classify->{classify};
         if ($event eq '_JUNK_') { last }
         $self->{events_seen}{$event} += 1;
-        my $op = $classify->{op};
+        # find out operator, and process as needed (sum, push to list).
+        #my $op = $classify->{op};
+        my $op = $self->event_op ($classify->{classify});
         if ($op eq 'sum') {
             $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
         } elsif ($op eq 'avg') {
             push @{$stats->{$line_info->{grouping_time}}{$event}}, $classify->{value};
-        } else {
-            # default is count
+        } elsif ($op eq 'count') {
             if (exists $stats->{$line_info->{grouping_time}}{$event}) {
                 $stats->{$line_info->{grouping_time}}{$event}++;
             } else {
                 $stats->{$line_info->{grouping_time}}{$event} = 1;
             }
+        } else {
+            die "Unknown op $op for line", Dumper ($line_info), ".\n";
         }
     }
 
@@ -455,7 +461,8 @@ sub classify_line {
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
         } elsif ($text =~ /lags commit timestamp \(\d+\) by (\d+) ms/) {
-            push @$events, { classify => 'timestamp-lag', op => 'avg', value => $1 };
+            push @$events, { classify => 'timestamp-lag', value => $1 };
+            push @$events, { classify => 'timestamp-lag-count' };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
@@ -563,7 +570,7 @@ sub dump_stats {
         }
     }
 
-    my @rows = sort keys %{$self->{timestamps}};
+    my @row_timestamps = sort keys %{$self->{timestamps}};
     # get all columns (events)
     my @columns = sort keys %{$self->{events_seen}};
     foreach my $filename (keys %{$self->{stats}}) {
@@ -572,11 +579,11 @@ sub dump_stats {
         my $stats_fh = $self->get_fh ($stats_filename);
         # header
         print $stats_fh ("#timestamp\t", join ($self->{separator}, @columns), "\n");
-        foreach my $row (@rows) {
-            my @vals = ($row);
+        foreach my $row_ts (@row_timestamps) {
+            my @vals = ($row_ts);
             foreach my $column (@columns) {
-                if (defined $file_stats->{$row}{$column}) { 
-                    push @vals, $self->get_stats_value ($column, $file_stats->{$row}{$column});
+                if (defined $file_stats->{$row_ts}{$column}) { 
+                    push @vals, $self->get_stats_value ($column, $file_stats->{$row_ts}{$column});
                 } else {
                     push @vals, 0;
                 }
@@ -590,12 +597,22 @@ sub dump_stats {
 
 sub get_stats_value {
     my ($self, $event, $stats) = @_;
-    my $retval = $stats;
+    my $retval = undef;
     my $op = $self->event_op ($event);
     if ($op eq 'avg') {
         my $sum = 0;
         foreach my $stat (@$stats) { $sum += $stat }
         $retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+    } elsif ($op eq 'sum') {
+        # summed as part of classification
+        $retval = $stats;
+    } elsif ($op eq 'count') {
+        # counted as part of classification
+        $retval = $stats;
+    } else {
+        print STDERR "Can't get val for $event with op $op.\n";
+        print STDERR "Can't get val from stats ", Dumper ($stats), ".\n";
+        die;
     }
     return $retval;
 };
