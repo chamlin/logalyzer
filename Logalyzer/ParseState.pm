@@ -58,6 +58,7 @@ my $_levels = {
 };
 
 my $_event_info = {
+    'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     'delete' => { op => 'sum',  label => 'total (MB)' },
@@ -453,8 +454,8 @@ sub classify_line {
             push @$events, { classify => 'retry', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
-        } elsif ($text =~ /lags commit timestamp \((\d+)\)/) {
-            push @$events, { classify => 'timestamp-lag', op => 'avg', };
+        } elsif ($text =~ /lags commit timestamp \(\d+\) by (\d+) ms/) {
+            push @$events, { classify => 'timestamp-lag', op => 'avg', value => $1 };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
