@@ -473,7 +473,7 @@ sub classify_line {
             my $forest = $1;
             $forest =~ s/[:,;]$//;
             # sanity check
-            if ($forest =~ /^[a-zA-Z0-9-_]$/) {
+            if ($forest =~ /^[a-zA-Z0-9-_]+$/) {
                 push @$events, { classify => "Forest-$forest", op => 'count', };
             } else {
                 print STDERR "Bad forest name ($forest)? Text: $text.\n";
