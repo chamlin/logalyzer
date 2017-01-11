@@ -60,6 +60,7 @@ my $_levels = {
 my $_event_info = {
     'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)' },
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
+    'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     'delete' => { op => 'sum',  label => 'total (MB)' },
@@ -448,6 +449,11 @@ sub classify_line {
             push @$events, { classify => 'forest-state', op => 'count', };
         } elsif ($text =~ /^Mounted forest (\S+) locally/) {
             push @$events, { classify => 'mount', op => 'count', };
+        } elsif ($text =~ /journal frame took (\d+) ms to journal/) {
+            push @$events, { classify => 'journaling', value => $1 };
+        } elsif ($text =~ /lags commit timestamp \(\d+\) by (\d+) ms/) {
+            push @$events, { classify => 'timestamp-lag', value => $1 };
+            push @$events, { classify => 'timestamp-lag-count' };
         } elsif ($text =~ /^Merging /) {
             push @$events, { classify => 'merging', op => 'count', };
         } elsif ($text =~ /^Saving /) {
@@ -460,9 +466,6 @@ sub classify_line {
             push @$events, { classify => 'retry', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
-        } elsif ($text =~ /lags commit timestamp \(\d+\) by (\d+) ms/) {
-            push @$events, { classify => 'timestamp-lag', value => $1 };
-            push @$events, { classify => 'timestamp-lag-count' };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
@@ -476,7 +479,7 @@ sub classify_line {
             if ($forest =~ /^[a-zA-Z0-9-_]+$/) {
                 push @$events, { classify => "Forest-$forest", op => 'count', };
             } else {
-                print STDERR "Bad forest name ($forest)? Text: $text.\n";
+                # print STDERR "Bad forest name ($forest)? Text: $text.\n";
             }
         }
         # default
