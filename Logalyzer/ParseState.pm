@@ -61,6 +61,17 @@ my $_event_info = {
     'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)' },
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
     'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
+    'journaling-count' => { op => 'count', label => 'slow journal time (message count)' },
+    'jlag-semaphore' => { op => 'sum', label => 'journal lag time, semaphore (ms total)' },
+    'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)' },
+    'jlag-disk' => { op => 'sum', label => 'journal lag time, disk (ms total)' },
+    'jlag-disk-count' => { op => 'count', label => 'journal lag time, disk (message count)' },
+    'jlag-jarchive' => { op => 'sum', label => 'journal lag time, archiving (ms total)' },
+    'jlag-jarchive-count' => { op => 'count', label => 'journal lag time, archiving (message count)' },
+    'jlag-dbrep' => { op => 'sum', label => 'journal lag time, dbrep (ms total)' },
+    'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)' },
+    'jlag-localrep' => { op => 'sum', label => 'journal lag time, local rep (ms total)' },
+    'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)' },
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     'delete' => { op => 'sum',  label => 'total (MB)' },
@@ -68,6 +79,8 @@ my $_event_info = {
     save => { op => 'sum',  label => 'total (MB)' },
     'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     hung => { op => 'sum',  label => 'total (s)' },
+    canary => { op => 'sum',  label => 'total (s)' },
+    rollback => { op => 'count',  label => 'rollback (messages)' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -152,7 +165,7 @@ sub event_op {
 
 sub get_logfile_keyxx {
     my ($state, $filename) = @_;
-    $filename =~ /(node\d)/;
+    $filename =~ /ganymede-([ed]\d+)/;
     return $1;
 }
 
@@ -445,12 +458,41 @@ sub classify_line {
             );
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
+        # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
+        } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
+            push @$events, { classify => 'canary', op => 'sum', value => $1 };
         } elsif ($text =~ /^Forest (\S+) state/) {
             push @$events, { classify => 'forest-state', op => 'count', };
         } elsif ($text =~ /^Mounted forest (\S+) locally/) {
             push @$events, { classify => 'mount', op => 'count', };
-        } elsif ($text =~ /journal frame took (\d+) ms to journal/) {
+        # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
+        # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
+        # 
+        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
             push @$events, { classify => 'journaling', value => $1 };
+            push @$events, { classify => 'journaling-count' };
+            if ($2) {
+                push @$events, { classify => 'jlag-semaphore', value => $2 };
+                push @$events, { classify => 'jlag-semaphore-count' };
+            }
+            if ($3) {
+                push @$events, { classify => 'jlag-disk', value => $3 };
+                push @$events, { classify => 'jlag-disk-count' };
+            }
+            if ($4) {
+                push @$events, { classify => 'jlag-jarchive', value => $4 };
+                push @$events, { classify => 'jlag-jarchive-count' };
+            }
+            if ($5) {
+                push @$events, { classify => 'jlag-dbrep', value => $5 };
+                push @$events, { classify => 'jlag-dbrep-count' };
+            }
+            if ($6) {
+                push @$events, { classify => 'jlag-localrep', value => $6 };
+                push @$events, { classify => 'jlag-localrep-count' };
+            }
+        } elsif ($text =~ / rolling back/) {
+            push @$events, { classify => 'rollback', value => $1 };
         } elsif ($text =~ /lags commit timestamp \(\d+\) by (\d+) ms/) {
             push @$events, { classify => 'timestamp-lag', value => $1 };
             push @$events, { classify => 'timestamp-lag-count' };
@@ -464,6 +506,8 @@ sub classify_line {
             push @$events, { classify => 'config', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
+        } elsif ($text =~ / REQUEST: /) {
+            push @$events, { classify => 'REQUEST', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
