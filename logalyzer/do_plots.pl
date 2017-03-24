@@ -30,6 +30,7 @@ for (my $i = 1; $i <= $#columns; $i++) {
     my $index = $i + 1;
     my $col = $columns[$i];
     my $title = $col;
+if ($title =~ /^Forest/) { next }
     # underbar does sub a la TeX
     $title =~ s/_/\\_/g;
     my $filename = "$col.plot";
