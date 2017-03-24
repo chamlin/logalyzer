@@ -58,12 +58,29 @@ my $_levels = {
 };
 
 my $_event_info = {
+    'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)' },
+    'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
+    'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
+    'journaling-count' => { op => 'count', label => 'slow journal time (message count)' },
+    'jlag-semaphore' => { op => 'sum', label => 'journal lag time, semaphore (ms total)' },
+    'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)' },
+    'jlag-disk' => { op => 'sum', label => 'journal lag time, disk (ms total)' },
+    'jlag-disk-count' => { op => 'count', label => 'journal lag time, disk (message count)' },
+    'jlag-jarchive' => { op => 'sum', label => 'journal lag time, archiving (ms total)' },
+    'jlag-jarchive-count' => { op => 'count', label => 'journal lag time, archiving (message count)' },
+    'jlag-dbrep' => { op => 'sum', label => 'journal lag time, dbrep (ms total)' },
+    'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)' },
+    'jlag-localrep' => { op => 'sum', label => 'journal lag time, local rep (ms total)' },
+    'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)' },
     merge => { op => 'sum',  label => 'total (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    save => { op => 'sum',  label => 'total (MB)' },
     'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     hung => { op => 'sum',  label => 'total (s)' },
+    canary => { op => 'sum',  label => 'total (s)' },
+    rollback => { op => 'count',  label => 'rollback (messages)' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -131,7 +148,7 @@ sub current_line {
 
 sub event_label { 
     my ($self, $event) = @_;
-    if (exists $self->{event_info}{$event}) {
+    if (exists $self->{event_info}{$event}{label}) {
         return $self->{event_info}{$event}{label};
     }
     return $self->{event_info}{default}{op};
@@ -139,15 +156,16 @@ sub event_label {
 
 sub event_op { 
     my ($self, $event) = @_;
-    if (exists $self->{event_info}{$event}) {
-        return $self->{event_info}{$event}{op};
+    my $op = $self->{event_info}{default}{op};
+    if (exists $self->{event_info}{$event}{op}) {
+        $op = $self->{event_info}{$event}{op};
     }
-    return $self->{event_info}{default}{op};
+    return $op;
 }
 
 sub get_logfile_keyxx {
     my ($state, $filename) = @_;
-    $filename =~ /(node\d)/;
+    $filename =~ /ganymede-([ed]\d+)/;
     return $1;
 }
 
@@ -172,7 +190,11 @@ sub resolve_options {
     $self->{min_level_number} = $self->{levels}{$self->{min_level}};
 
     # check files in
-    if   ($self->{glob}) { $self->{filenames} = [grep { -f } glob ($self->{glob}) ]}
+    if   ($self->{glob}) {
+        foreach my $glob (split (/\s*,\s*/, $self->{glob})) {
+            push @{$self->{filenames}}, grep { -f } glob ($glob);
+        }
+    }
     elsif ($self->{file}) { $self->{filenames} = [grep { -f } (split (',', $self->{file}))] }
     else { }
     unless (scalar @{$self->{filenames}}) { print STDERR "No filenames provided/found.\n"; $exit_with_usage = 1; }
@@ -275,6 +297,7 @@ sub process_files {
 
 my $min_fh = { current_line => { date_time => '9999-99-99'}, done => 1 };
 
+# get most recent line of all files, and process it (has already been classified).
 sub process_line {
     my ($self) = @_;
     
@@ -307,18 +330,21 @@ sub process_line {
         my $event = $classify->{classify};
         if ($event eq '_JUNK_') { last }
         $self->{events_seen}{$event} += 1;
-        my $op = $classify->{op};
+        # find out operator, and process as needed (sum, push to list).
+        #my $op = $classify->{op};
+        my $op = $self->event_op ($classify->{classify});
         if ($op eq 'sum') {
             $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
         } elsif ($op eq 'avg') {
             push @{$stats->{$line_info->{grouping_time}}{$event}}, $classify->{value};
-        } else {
-            # default is count
+        } elsif ($op eq 'count') {
             if (exists $stats->{$line_info->{grouping_time}}{$event}) {
                 $stats->{$line_info->{grouping_time}}{$event}++;
             } else {
                 $stats->{$line_info->{grouping_time}}{$event} = 1;
             }
+        } else {
+            die "Unknown op $op for line", Dumper ($line_info), ".\n";
         }
     }
 
@@ -407,6 +433,13 @@ sub classify_line {
         if (index ($text, 'XDQP') >= 1) {
             push @$events, { classify => 'XDQP', op => 'count', value => 1 };
         }
+        # cms
+        if ($text =~ /STARTING EVENT-INSERT/) {
+            push @$events, { classify => 'event-insert', op => 'count', value => 1 };
+        }
+        if ($text =~ /unable to configure logging/) {
+            push @$events, { classify => 'logging-configure', op => 'count', value => 1 };
+        }
         # other stuff
         if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
             push @$events, (
@@ -425,10 +458,44 @@ sub classify_line {
             );
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
+        # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
+        } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
+            push @$events, { classify => 'canary', op => 'sum', value => $1 };
         } elsif ($text =~ /^Forest (\S+) state/) {
             push @$events, { classify => 'forest-state', op => 'count', };
         } elsif ($text =~ /^Mounted forest (\S+) locally/) {
             push @$events, { classify => 'mount', op => 'count', };
+        # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
+        # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
+        # 
+        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
+            push @$events, { classify => 'journaling', value => $1 };
+            push @$events, { classify => 'journaling-count' };
+            if ($2) {
+                push @$events, { classify => 'jlag-semaphore', value => $2 };
+                push @$events, { classify => 'jlag-semaphore-count' };
+            }
+            if ($3) {
+                push @$events, { classify => 'jlag-disk', value => $3 };
+                push @$events, { classify => 'jlag-disk-count' };
+            }
+            if ($4) {
+                push @$events, { classify => 'jlag-jarchive', value => $4 };
+                push @$events, { classify => 'jlag-jarchive-count' };
+            }
+            if ($5) {
+                push @$events, { classify => 'jlag-dbrep', value => $5 };
+                push @$events, { classify => 'jlag-dbrep-count' };
+            }
+            if ($6) {
+                push @$events, { classify => 'jlag-localrep', value => $6 };
+                push @$events, { classify => 'jlag-localrep-count' };
+            }
+        } elsif ($text =~ / rolling back/) {
+            push @$events, { classify => 'rollback', value => $1 };
+        } elsif ($text =~ /lags commit timestamp \(\d+\) by (\d+) ms/) {
+            push @$events, { classify => 'timestamp-lag', value => $1 };
+            push @$events, { classify => 'timestamp-lag-count' };
         } elsif ($text =~ /^Merging /) {
             push @$events, { classify => 'merging', op => 'count', };
         } elsif ($text =~ /^Saving /) {
@@ -439,15 +506,25 @@ sub classify_line {
             push @$events, { classify => 'config', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
+        } elsif ($text =~ / REQUEST: /) {
+            push @$events, { classify => 'REQUEST', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             push @$events, { classify => 'backup', op => 'count', };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
+        if ($text =~ /java.net.ConnectException/) {
+            push @$events, { classify => "java.net.ConnectException", op => 'count', };
+        }
         if ($text =~ /orest (\S\S+)/) {
             my $forest = $1;
             $forest =~ s/[:,;]$//;
-            push @$events, { classify => "Forest-$forest", op => 'count', };
+            # sanity check
+            if ($forest =~ /^[a-zA-Z0-9-_]+$/) {
+                push @$events, { classify => "Forest-$forest", op => 'count', };
+            } else {
+                # print STDERR "Bad forest name ($forest)? Text: $text.\n";
+            }
         }
         # default
         unless (scalar @$events) {
@@ -545,7 +622,7 @@ sub dump_stats {
         }
     }
 
-    my @rows = sort keys %{$self->{timestamps}};
+    my @row_timestamps = sort keys %{$self->{timestamps}};
     # get all columns (events)
     my @columns = sort keys %{$self->{events_seen}};
     foreach my $filename (keys %{$self->{stats}}) {
@@ -554,11 +631,11 @@ sub dump_stats {
         my $stats_fh = $self->get_fh ($stats_filename);
         # header
         print $stats_fh ("#timestamp\t", join ($self->{separator}, @columns), "\n");
-        foreach my $row (@rows) {
-            my @vals = ($row);
+        foreach my $row_ts (@row_timestamps) {
+            my @vals = ($row_ts);
             foreach my $column (@columns) {
-                if (defined $file_stats->{$row}{$column}) { 
-                    push @vals, $self->get_stats_value ($column, $file_stats->{$row}{$column});
+                if (defined $file_stats->{$row_ts}{$column}) { 
+                    push @vals, $self->get_stats_value ($column, $file_stats->{$row_ts}{$column});
                 } else {
                     push @vals, 0;
                 }
@@ -572,12 +649,22 @@ sub dump_stats {
 
 sub get_stats_value {
     my ($self, $event, $stats) = @_;
-    my $retval = $stats;
+    my $retval = undef;
     my $op = $self->event_op ($event);
     if ($op eq 'avg') {
         my $sum = 0;
         foreach my $stat (@$stats) { $sum += $stat }
         $retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+    } elsif ($op eq 'sum') {
+        # summed as part of classification
+        $retval = $stats;
+    } elsif ($op eq 'count') {
+        # counted as part of classification
+        $retval = $stats;
+    } else {
+        print STDERR "Can't get val for $event with op $op.\n";
+        print STDERR "Can't get val from stats ", Dumper ($stats), ".\n";
+        die;
     }
     return $retval;
 };
@@ -614,6 +701,7 @@ Options:
     --glob XXX
         XXX is a glob pattern.  For example, --glob "Err*.txt"  will select all ErrorLogs in the current directory.
 
+        Multiple patterns can be given, separated by commas.
         One of file or glob must be specified.
 
     --mintime
