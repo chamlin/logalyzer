@@ -58,29 +58,34 @@ my $_levels = {
 };
 
 my $_event_info = {
-    'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)' },
+    'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)', no_dump => 1 },
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
     'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
-    'journaling-count' => { op => 'count', label => 'slow journal time (message count)' },
+    'journaling-count' => { op => 'count', label => 'slow journal time (message count)', no_dump => 1 },
     'jlag-semaphore' => { op => 'sum', label => 'journal lag time, semaphore (ms total)' },
-    'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)' },
+    'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)', no_dump => 1 },
     'jlag-disk' => { op => 'sum', label => 'journal lag time, disk (ms total)' },
-    'jlag-disk-count' => { op => 'count', label => 'journal lag time, disk (message count)' },
+    'jlag-disk-count' => { op => 'count', label => 'journal lag time, disk (message count)', no_dump => 1 },
     'jlag-jarchive' => { op => 'sum', label => 'journal lag time, archiving (ms total)' },
-    'jlag-jarchive-count' => { op => 'count', label => 'journal lag time, archiving (message count)' },
+    'jlag-jarchive-count' => { op => 'count', label => 'journal lag time, archiving (message count)', no_dump => 1 },
     'jlag-dbrep' => { op => 'sum', label => 'journal lag time, dbrep (ms total)' },
-    'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)' },
+    'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)', no_dump => 1 },
     'jlag-localrep' => { op => 'sum', label => 'journal lag time, local rep (ms total)' },
-    'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)' },
-    merge => { op => 'sum',  label => 'total (MB)' },
-    'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)', no_dump => 1 },
+     merge => { op => 'sum',  label => 'total (MB)' },
+    'merge-size' => { op => 'avg',  label => 'mean size (MB)' },
+    'merge-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
+    'merge-count' => { op => 'count', no_dump => 1 },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     save => { op => 'sum',  label => 'total (MB)' },
-    'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'save-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (s)' },
+    logline => { op => 'count',  label => 'logged line', no_dump => 1 },
     rollback => { op => 'count',  label => 'rollback (messages)' },
+    'authticket-update-avg' => { op => 'avg',  label => 'avg ms' },
+    'authticket-get-feed-avg' => { op => 'avg',  label => 'avg ms' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -111,6 +116,16 @@ sub new {
         'max_time' => undef,
     };
     return bless $blank, $class;
+}
+
+sub PT_to_seconds {
+    my ($test) = @_;
+    my ($h, $m, $s) = ($test =~ /PT(?:(\d+)H)?(?:(\d+)M)?(?:([0-9.]+)S)?/);
+    unless (defined $h) { $h = 0 }
+    unless (defined $m) { $m = 0 }
+    unless (defined $s) { $s = 0 }
+    my $seconds = $h * 3600 + $m * 60 + $s;
+    return $seconds;
 }
 
 # get it, open if needed.
@@ -151,7 +166,7 @@ sub event_label {
     if (exists $self->{event_info}{$event}{label}) {
         return $self->{event_info}{$event}{label};
     }
-    return $self->{event_info}{default}{op};
+    return $event
 }
 
 sub event_op { 
@@ -165,7 +180,7 @@ sub event_op {
 
 sub get_logfile_keyxx {
     my ($state, $filename) = @_;
-    $filename =~ /ganymede-([ed]\d+)/;
+    $filename =~ /(psml\dc\d\d\d)/;
     return $1;
 }
 
@@ -346,6 +361,8 @@ sub process_line {
         } else {
             die "Unknown op $op for line", Dumper ($line_info), ".\n";
         }
+        # add the filename_index to see log continuity
+        $stats->{$line_info->{grouping_time}}{logline} = $self->{file_info}{$min->{key}}{filename_index};
     }
 
     $self->dump_line ($min);
@@ -365,6 +382,9 @@ sub dump_line {
         $line_info->{line},
     ));
     foreach my $event (@{$line_info->{events}}) {
+        my $class = $event->{classify};
+        # don't print out some stuff
+        if ($self->{event_info}{$class}{no_dump})  { next }
         my $outfile = $self->{outdir} . '/' . $event->{classify};
         # file is outdir/log-as
         # line is time line (logfile)
@@ -433,25 +453,40 @@ sub classify_line {
         if (index ($text, 'XDQP') >= 1) {
             push @$events, { classify => 'XDQP', op => 'count', value => 1 };
         }
-        # cms
-        if ($text =~ /STARTING EVENT-INSERT/) {
-            push @$events, { classify => 'event-insert', op => 'count', value => 1 };
+        #if ($text =~ /UserName=.*\*\*\*([^*])\*\*\*.*Time (\d\.\d+)/) {
+        if ($text =~ /UserName=.*\*\*\*\*([^*]+?)\*\*\*\*.*TIME\s(\d+\.\d+)/) {
+            my ($call, $time) = ($1, $2);
+            $call =~ s/API PROCESS TIME//;
+            $call =~ s/\s//g;
+            push @$events, { classify => $call, value => $time };
+        } elsif ($text =~ /-api-authticket: .*maxhits greater than/) {
+            push @$events, { classify => "authticket-maxhits", };
         }
         if ($text =~ /unable to configure logging/) {
             push @$events, { classify => 'logging-configure', op => 'count', value => 1 };
         }
+        if ($text =~ /^\[Event:id=([^]]+)/) {
+            my $trace_event = "Event-$1";  $trace_event =~ s/[ :;,]/-/; 
+            push @$events, { classify => $trace_event, };
+        }
         # other stuff
-        if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
+        if ($text =~ /^Merged (\d+) MB in (\d+) sec at (\d+) MB/) {
+            my ($mb, $s, $rate) = ($1, $2, $3);
             push @$events, (
                 { classify => 'merge', op => 'sum', value => $1 },
-                { classify => 'merge-rate', op => 'avg', value => $2 },
+                { classify => 'merge-count', value => 1 },
+                { classify => 'merge-size', value => $1 },
             );
-        } elsif ($text =~ /^Deleted (\d+) MB in \d+ sec at (\d+) MB/) {
+            if ($s > 2) { push @events, { classify => 'merge-rate', op => 'avg', value => $2 } }
+            open my $csv, '>>', 'merge-rate-vs-size.csv';
+            print $csv "$1,$2\n";
+            close $csv;
+        } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
                 { classify => 'delete-rate', op => 'avg', value => $2 },
             );
-        } elsif ($text =~ /^Saved (\d+) MB in \d+ sec at (\d+) MB/) {
+        } elsif ($text =~ /^Saved (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'save', op => 'sum', value => $1 },
                 { classify => 'save-rate', op => 'avg', value => $2 },
@@ -468,7 +503,7 @@ sub classify_line {
         # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
         # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
         # 
-        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
+        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
             push @$events, { classify => 'journaling', value => $1 };
             push @$events, { classify => 'journaling-count' };
             if ($2) {
@@ -540,6 +575,7 @@ sub classify_line {
 sub init_files {
     my ($self) = @_;
 # init stats, init fh
+    my $filename_index = 0;
     foreach my $filename (@{$self->{filenames}}) {
         my $key = $self->get_logfile_key ($filename);
         my $fh = undef;
@@ -552,11 +588,13 @@ sub init_files {
             'lines_read' => 0,
             'date_time' => '1900-01-01 00:00:00',
             'grouping_time' => $self-> grouping_time ('1900-01-01 00:00:00'),
+            'filename_index' => $filename_index,
         };
         $self->{file_info}{$filename} = $file_info;
         # read list, removed when done
         push @{$self->{logfh}}, $file_info;
         $self->get_log_line ($filename);
+        $filename_index++;
     }
 };
 
@@ -654,7 +692,8 @@ sub get_stats_value {
     if ($op eq 'avg') {
         my $sum = 0;
         foreach my $stat (@$stats) { $sum += $stat }
-        $retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+        #$retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+        $retval = $sum / scalar (@$stats);
     } elsif ($op eq 'sum') {
         # summed as part of classification
         $retval = $stats;
