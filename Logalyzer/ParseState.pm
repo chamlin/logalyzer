@@ -133,7 +133,10 @@ sub get_fh {
     my ($self, $outfile) = @_;
     my $out = $self->{fh}{$outfile};
     unless ($out) {
-        open ($out, '>', $outfile) or die "Can't open $outfile.\n";
+        unless (open ($out, '>', $outfile)) {
+            print STDERR Dumper $self;
+            die "Can't open $outfile.\n";
+        }
         print STDERR "> $outfile\n";
         $self->{fh}{$outfile} = $out;
     }
@@ -470,17 +473,18 @@ sub classify_line {
             push @$events, { classify => $trace_event, };
         }
         # other stuff
-        if ($text =~ /^Merged (\d+) MB in (\d+) sec at (\d+) MB/) {
+        if ($text =~ /^Merged (\d+) MB at (\d+) MB\/sec to (.+)\/[^\/]+$/) {
             my ($mb, $s, $rate) = ($1, $2, $3);
             push @$events, (
                 { classify => 'merge', op => 'sum', value => $1 },
                 { classify => 'merge-count', value => 1 },
                 { classify => 'merge-size', value => $1 },
+                { classify => 'merge-rate', value => $2 },
             );
-            if ($s > 2) { push @events, { classify => 'merge-rate', op => 'avg', value => $2 } }
-            open my $csv, '>>', 'merge-rate-vs-size.csv';
-            print $csv "$1,$2\n";
-            close $csv;
+            #if ($s > 2) { push @$events, { classify => 'merge-rate', op => 'avg', value => $2 } }
+            #open my $csv, '>>', 'merge-rate-vs-size.csv';
+            #print $csv "$1,$2\n";
+            #close $csv;
         } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
