@@ -4,6 +4,8 @@ package Logalyzer::ParseState;
 
 use Data::Dumper;
 
+use List::Util qw (sum);
+
 my $_prefixes = {
     ADMIN => 1,
     ALERT => 1,
@@ -86,6 +88,31 @@ my $_event_info = {
     rollback => { op => 'count',  label => 'rollback (messages)' },
     'authticket-update-avg' => { op => 'avg',  label => 'avg ms' },
     'authticket-get-feed-avg' => { op => 'avg',  label => 'avg ms' },
+    'mem-p' => { op => 'avg',  label => 'mem %' },
+    'mem-swap-p' => { op => 'avg',  label => 'swap %' },
+    'mem-swap-k' => { op => 'avg',  label => 'swap k' },
+    'mem-virt-p' => { op => 'avg',  label => 'virt %' },
+    'mem-virt-k' => { op => 'avg',  label => 'virt k' },
+    'mem-rss-p' => { op => 'avg',  label => 'rss %' },
+    'mem-rss-k' => { op => 'avg',  label => 'rss k' },
+    'mem-anon-p' => { op => 'avg',  label => 'virt %' },
+    'mem-anon-k' => { op => 'avg',  label => 'virt k' },
+    'mem-file-p' => { op => 'avg',  label => 'file %' },
+    'mem-file-k' => { op => 'avg',  label => 'file k' },
+    'mem-forest-p' => { op => 'avg',  label => 'forest %' },
+    'mem-forest-k' => { op => 'avg',  label => 'forest k' },
+    'mem-cache-p' => { op => 'avg',  label => 'cache %' },
+    'mem-cache-k' => { op => 'avg',  label => 'cache k' },
+    'mem-registry-p' => { op => 'avg',  label => 'registry %' },
+    'mem-registry-k' => { op => 'avg',  label => 'registry k' },
+    'mem-huge-p' => { op => 'avg',  label => 'huge %' },
+    'mem-huge-k' => { op => 'avg',  label => 'huge k' },
+    'mem-join-p' => { op => 'avg',  label => 'join %' },
+    'mem-join-k' => { op => 'avg',  label => 'join k' },
+    'mem-unclosed-p' => { op => 'avg',  label => 'unclosed %' },
+    'mem-unclosed-k' => { op => 'avg',  label => 'unclosed k' },
+    'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' },
+    'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -485,6 +512,40 @@ sub classify_line {
             #open my $csv, '>>', 'merge-rate-vs-size.csv';
             #print $csv "$1,$2\n";
             #close $csv;
+        } elsif ($text =~ m/^Memory (\d+)%/) {
+            my ($mem_p, $phys_k, $rest) = ($text =~ m/^Memory (\d+)% phys=(\d+) (.*)/);
+            my %values = (
+                mem_percent => $mem_p,
+                mem_k => $phys_k,
+            );
+            #my ($mem_p, $mem_phys_k, $mem_virt_k, $mem_virt_p, $mem_rss) = ($1, $2, $3, $4);
+            foreach $stat (split /\s/, $rest) {
+                my ($name, $value_k, $value_p) = ($stat =~ /(\w+)=(\d+)\((\d+)%\)/);
+                #print "$stat: $name, $value_k, $value_p\n";
+                $values{'mem-'.$name.'-k'} = $value_k;
+                $values{'mem-'.$name.'-p'} = $value_p;
+            }
+            foreach $stat (keys %values) {
+                push @$events, (
+                    { classify => $stat, value => $values{$stat} },
+                );
+            }
+            my $big_sum = 0;
+            foreach $value ('mem-huge-p', 'mem-anon-p', 'mem-swap-p', 'mem-file-p') {
+                if (exists $values{$value}) { $big_sum += $values{$value} }
+            }
+            if ($big_sum) {
+                push @$events, (
+                    { classify => 'mem-huge-anon-swap-file-p', value => $big_sum },
+                );
+            }
+            if (exists $values{'mem-forest-p'} && exists $values{'mem-cache-p'}) {
+                push @$events, (
+                    { classify => 'mem-forest-cache-p', value => ($values{'mem-forest-p'} + $values{'mem-cache-p'}) },
+                );
+            }
+#die Dumper \%values; 
+        
         } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
