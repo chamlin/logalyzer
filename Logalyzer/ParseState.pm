@@ -113,6 +113,7 @@ my $_event_info = {
     'mem-unclosed-k' => { op => 'avg',  label => 'unclosed k' },
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' },
     'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
+    'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -568,6 +569,8 @@ sub classify_line {
         # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
         # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
         # 
+        } elsif ($text =~ /Rebalanced .* at (\d+) fragments\/sec/) {
+            push @$events, { classify => 'rebalance', op => 'avg', value => $1 };
         } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
             push @$events, { classify => 'journaling', value => $1 };
             push @$events, { classify => 'journaling-count' };
