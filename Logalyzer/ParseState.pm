@@ -88,32 +88,34 @@ my $_event_info = {
     rollback => { op => 'count',  label => 'rollback (messages)' },
     'authticket-update-avg' => { op => 'avg',  label => 'avg ms' },
     'authticket-get-feed-avg' => { op => 'avg',  label => 'avg ms' },
-    'mem-p' => { op => 'avg',  label => 'mem %' },
+    'mem-percent' => { op => 'avg',  label => 'mem %' },
+    'mem-k' => { op => 'avg',  label => 'mem kB' },
     'mem-swap-p' => { op => 'avg',  label => 'swap %' },
-    'mem-swap-k' => { op => 'avg',  label => 'swap k' },
+    'mem-swap-k' => { op => 'avg',  label => 'swap kB' },
     'mem-virt-p' => { op => 'avg',  label => 'virt %' },
-    'mem-virt-k' => { op => 'avg',  label => 'virt k' },
+    'mem-virt-k' => { op => 'avg',  label => 'virt kB' },
     'mem-rss-p' => { op => 'avg',  label => 'rss %' },
-    'mem-rss-k' => { op => 'avg',  label => 'rss k' },
+    'mem-rss-k' => { op => 'avg',  label => 'rss kB' },
     'mem-anon-p' => { op => 'avg',  label => 'anon %' },
-    'mem-anon-k' => { op => 'avg',  label => 'anon k' },
+    'mem-anon-k' => { op => 'avg',  label => 'anon kB' },
     'mem-file-p' => { op => 'avg',  label => 'file %' },
-    'mem-file-k' => { op => 'avg',  label => 'file k' },
+    'mem-file-k' => { op => 'avg',  label => 'file kB' },
     'mem-forest-p' => { op => 'avg',  label => 'forest %' },
-    'mem-forest-k' => { op => 'avg',  label => 'forest k' },
+    'mem-forest-k' => { op => 'avg',  label => 'forest kB' },
     'mem-cache-p' => { op => 'avg',  label => 'cache %' },
-    'mem-cache-k' => { op => 'avg',  label => 'cache k' },
+    'mem-cache-k' => { op => 'avg',  label => 'cache kB' },
     'mem-registry-p' => { op => 'avg',  label => 'registry %' },
-    'mem-registry-k' => { op => 'avg',  label => 'registry k' },
+    'mem-registry-k' => { op => 'avg',  label => 'registry kB' },
     'mem-huge-p' => { op => 'avg',  label => 'huge %' },
-    'mem-huge-k' => { op => 'avg',  label => 'huge k' },
+    'mem-huge-k' => { op => 'avg',  label => 'huge kB' },
     'mem-join-p' => { op => 'avg',  label => 'join %' },
-    'mem-join-k' => { op => 'avg',  label => 'join k' },
+    'mem-join-k' => { op => 'avg',  label => 'join kB' },
     'mem-unclosed-p' => { op => 'avg',  label => 'unclosed %' },
-    'mem-unclosed-k' => { op => 'avg',  label => 'unclosed k' },
+    'mem-unclosed-k' => { op => 'avg',  label => 'unclosed kB' },
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' },
     'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
+    'slow-count' => { op => 'sum',  label => 'slow messages' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -501,23 +503,27 @@ sub classify_line {
             push @$events, { classify => $trace_event, };
         }
         # other stuff
-        if ($text =~ /^Merged (\d+) MB at (\d+) MB\/sec to (.+)\/[^\/]+$/) {
-            my ($mb, $s, $rate) = ($1, $2, $3);
+        if ($text =~ /^Merged (\d+) MB (in \d+ sec )?at (\d+) MB\/sec to (.+)\/[^\/]+$/) {
+            my ($mb, $junk, $rate, $stand) = ($1, $2, $3, $4);
             push @$events, (
-                { classify => 'merge', op => 'sum', value => $1 },
+                { classify => 'merge', op => 'sum', value => $mb },
                 { classify => 'merge-count', value => 1 },
-                { classify => 'merge-size', value => $1 },
-                { classify => 'merge-rate', value => $2 },
+                { classify => 'merge-size', value => $mb },
+                { classify => 'merge-rate', value => $rate },
             );
             #if ($s > 2) { push @$events, { classify => 'merge-rate', op => 'avg', value => $2 } }
             #open my $csv, '>>', 'merge-rate-vs-size.csv';
             #print $csv "$1,$2\n";
             #close $csv;
+        } elsif ($text =~ m/^Slow /) {
+            push @$events, (
+                { classify => 'slow-count', value => 1 },
+            );
         } elsif ($text =~ m/^Memory (\d+)%/) {
             my ($mem_p, $phys_k, $rest) = ($text =~ m/^Memory (\d+)% phys=(\d+) (.*)/);
             my %values = (
-                mem_percent => $mem_p,
-                mem_k => $phys_k,
+                'mem-percent' => $mem_p,
+                'mem-k' => $phys_k,
             );
             #my ($mem_p, $mem_phys_k, $mem_virt_k, $mem_virt_p, $mem_rss) = ($1, $2, $3, $4);
             foreach $stat (split /\s/, $rest) {
