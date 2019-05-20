@@ -64,6 +64,7 @@ my $_event_info = {
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
     'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
     'journaling-count' => { op => 'count', label => 'slow journal time (message count)', no_dump => 1 },
+    'journal-stuff' => { op => 'count', label => 'general journal messages' },
     'jlag-semaphore' => { op => 'sum', label => 'journal lag time, semaphore (ms total)' },
     'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)', no_dump => 1 },
     'jlag-disk' => { op => 'sum', label => 'journal lag time, disk (ms total)' },
@@ -82,6 +83,7 @@ my $_event_info = {
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
     save => { op => 'sum',  label => 'total (MB)' },
     'save-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
+    'detecting' => { op => 'count',  label => 'detecting messages' },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (s)' },
     logline => { op => 'count',  label => 'logged line', no_dump => 1 },
@@ -116,6 +118,9 @@ my $_event_info = {
     'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
+    'stand-stuff' => { op => 'sum',  label => 'stand messages'},
+    'keystore' => { op => 'sum',  label => 'keystore messages'},
+    'deadlock' => { op => 'count',  label => 'deadlock messages'},
     default => { op => 'count',  label => 'count' },
 };
 
@@ -562,13 +567,23 @@ sub classify_line {
                 { classify => 'save', op => 'sum', value => $1 },
                 { classify => 'save-rate', op => 'avg', value => $2 },
             );
+        } elsif ($text =~ /^Keystore: /) {
+            push @$events, (
+                { classify => 'keystore', value => 1 },
+            );
+        } elsif ($text =~ /^((Closing|Creating) journal|JournalBackup)/) {
+            push @$events, (
+                { classify => 'journal-stuff', value => 1 },
+            );
         } elsif ($text =~ /^~?(OnDiskStand|InMemoryStand)/) {
             push @$events, (
-                { classify => 'stand-stuff', op => 'sum', value => 1 },
+                { classify => 'stand-stuff', value => 1 },
             );
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
+        } elsif ($text =~ /^Deadlock /) {
+            push @$events, { classify => 'deadlock', value => 1 };
         } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
             push @$events, { classify => 'canary', op => 'sum', value => $1 };
         } elsif ($text =~ /^Forest (\S+) state/) {
@@ -612,8 +627,8 @@ sub classify_line {
             push @$events, { classify => 'merging', op => 'count', };
         } elsif ($text =~ /^Saving /) {
             push @$events, { classify => 'saving', op => 'count', };
-        } elsif ($text =~ /^Detecting (indexes|compatability) for database/) {
-            push @$events, { classify => 'detecting', op => 'count', };
+        } elsif ($text =~ /^(Detecting|Detected) (indexes|compat[ai]bility) /) {
+            push @$events, { classify => 'detecting' };
         } elsif ($text =~ /^New configuration state retrieved/) {
             push @$events, { classify => 'config', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
