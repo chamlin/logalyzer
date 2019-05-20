@@ -486,7 +486,6 @@ sub classify_line {
         if (index ($text, 'XDQP') >= 1) {
             push @$events, { classify => 'XDQP', op => 'count', value => 1 };
         }
-        #if ($text =~ /UserName=.*\*\*\*([^*])\*\*\*.*Time (\d\.\d+)/) {
         if ($text =~ /UserName=.*\*\*\*\*([^*]+?)\*\*\*\*.*TIME\s(\d+\.\d+)/) {
             my ($call, $time) = ($1, $2);
             $call =~ s/API PROCESS TIME//;
@@ -562,6 +561,10 @@ sub classify_line {
             push @$events, (
                 { classify => 'save', op => 'sum', value => $1 },
                 { classify => 'save-rate', op => 'avg', value => $2 },
+            );
+        } elsif ($text =~ /^~?(OnDiskStand|InMemoryStand)/) {
+            push @$events, (
+                { classify => 'stand-stuff', op => 'sum', value => 1 },
             );
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
