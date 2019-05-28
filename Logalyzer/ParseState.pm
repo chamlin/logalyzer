@@ -121,6 +121,8 @@ my $_event_info = {
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
     'keystore' => { op => 'sum',  label => 'keystore messages'},
     'deadlock' => { op => 'count',  label => 'deadlock messages'},
+    'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
+    'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -516,9 +518,9 @@ sub classify_line {
                 { classify => 'merge-rate', value => $rate },
             );
             #if ($s > 2) { push @$events, { classify => 'merge-rate', op => 'avg', value => $2 } }
-            #open my $csv, '>>', 'merge-rate-vs-size.csv';
-            #print $csv "$1,$2\n";
-            #close $csv;
+            open my $csv, '>>', 'merge-rate-vs-size.csv';
+            print $csv "$rate,$mb\n";
+            close $csv;
         } elsif ($text =~ m/^Slow /) {
             push @$events, (
                 { classify => 'slow-count', value => 1 },
@@ -575,10 +577,16 @@ sub classify_line {
             push @$events, (
                 { classify => 'journal-stuff', value => 1 },
             );
-        } elsif ($text =~ /^~?(OnDiskStand|InMemoryStand)/) {
+        } elsif ($text =~ /^(~?)(OnDiskStand|InMemoryStand)/) {
             push @$events, (
                 { classify => 'stand-stuff', value => 1 },
             );
+            my ($tilde, $op) = ($1, $2);
+            if ($op eq 'OnDiskStand' && ! $tilde) {
+                 push @$events, { classify => 'on-disk-stand' };
+            } elsif ($op eq 'InMemoryStand' && ! $tilde) {
+                 push @$events, { classify => 'in-memory-stand' };
+            }
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
