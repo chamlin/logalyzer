@@ -91,29 +91,29 @@ my $_event_info = {
     'authticket-update-avg' => { op => 'avg',  label => 'avg ms' },
     'authticket-get-feed-avg' => { op => 'avg',  label => 'avg ms' },
     'mem-percent' => { op => 'avg',  label => 'mem %' },
-    'mem-k' => { op => 'avg',  label => 'mem kB' },
+    'mem-mb' => { op => 'avg',  label => 'mem MB' },
     'mem-swap-p' => { op => 'avg',  label => 'swap %' },
-    'mem-swap-k' => { op => 'avg',  label => 'swap kB' },
+    'mem-swap-mb' => { op => 'avg',  label => 'swap MB' },
     'mem-virt-p' => { op => 'avg',  label => 'virt %' },
-    'mem-virt-k' => { op => 'avg',  label => 'virt kB' },
+    'mem-virt-mb' => { op => 'avg',  label => 'virt MB' },
     'mem-rss-p' => { op => 'avg',  label => 'rss %' },
-    'mem-rss-k' => { op => 'avg',  label => 'rss kB' },
+    'mem-rss-mb' => { op => 'avg',  label => 'rss MB' },
     'mem-anon-p' => { op => 'avg',  label => 'anon %' },
-    'mem-anon-k' => { op => 'avg',  label => 'anon kB' },
+    'mem-anon-mb' => { op => 'avg',  label => 'anon MB' },
     'mem-file-p' => { op => 'avg',  label => 'file %' },
-    'mem-file-k' => { op => 'avg',  label => 'file kB' },
+    'mem-file-mb' => { op => 'avg',  label => 'file MB' },
     'mem-forest-p' => { op => 'avg',  label => 'forest %' },
-    'mem-forest-k' => { op => 'avg',  label => 'forest kB' },
+    'mem-forest-mb' => { op => 'avg',  label => 'forest MB' },
     'mem-cache-p' => { op => 'avg',  label => 'cache %' },
-    'mem-cache-k' => { op => 'avg',  label => 'cache kB' },
+    'mem-cache-mb' => { op => 'avg',  label => 'cache MB' },
     'mem-registry-p' => { op => 'avg',  label => 'registry %' },
-    'mem-registry-k' => { op => 'avg',  label => 'registry kB' },
+    'mem-registry-mb' => { op => 'avg',  label => 'registry MB' },
     'mem-huge-p' => { op => 'avg',  label => 'huge %' },
-    'mem-huge-k' => { op => 'avg',  label => 'huge kB' },
+    'mem-huge-mb' => { op => 'avg',  label => 'huge MB' },
     'mem-join-p' => { op => 'avg',  label => 'join %' },
-    'mem-join-k' => { op => 'avg',  label => 'join kB' },
+    'mem-join-mb' => { op => 'avg',  label => 'join MB' },
     'mem-unclosed-p' => { op => 'avg',  label => 'unclosed %' },
-    'mem-unclosed-k' => { op => 'avg',  label => 'unclosed kB' },
+    'mem-unclosed-mb' => { op => 'avg',  label => 'unclosed MB' },
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' },
     'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
@@ -123,6 +123,8 @@ my $_event_info = {
     'deadlock' => { op => 'count',  label => 'deadlock messages'},
     'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
     'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
+    'backup' => { op => 'count',  label => 'backup messages' },
+    'start-backup' => { op => 'count',  label => 'start backup messages' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -529,13 +531,13 @@ sub classify_line {
             my ($mem_p, $phys_k, $rest) = ($text =~ m/^Memory (\d+)% phys=(\d+) (.*)/);
             my %values = (
                 'mem-percent' => $mem_p,
-                'mem-k' => $phys_k,
+                'mem-mb' => $phys_k,
             );
             #my ($mem_p, $mem_phys_k, $mem_virt_k, $mem_virt_p, $mem_rss) = ($1, $2, $3, $4);
             foreach $stat (split /\s/, $rest) {
                 my ($name, $value_k, $value_p) = ($stat =~ /(\w+)=(\d+)\((\d+)%\)/);
                 #print "$stat: $name, $value_k, $value_p\n";
-                $values{'mem-'.$name.'-k'} = $value_k;
+                $values{'mem-'.$name.'-mb'} = $value_k;
                 $values{'mem-'.$name.'-p'} = $value_p;
             }
             foreach $stat (keys %values) {
@@ -644,7 +646,8 @@ sub classify_line {
         } elsif ($text =~ / REQUEST: /) {
             push @$events, { classify => 'REQUEST', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
-            push @$events, { classify => 'backup', op => 'count', };
+            if ($1 =~ /^Start/) { push @$events, { classify => 'start-backup' } }
+            push @$events, { classify => 'backup' };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
