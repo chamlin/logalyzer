@@ -8,6 +8,11 @@ use Logalyzer::ParseState;
 
 my $state = new Logalyzer::ParseState();
 
+my ($start, $end) = @ARGV;
+
+if ($start) { $start = "'$start'" } else { $start = '*' }
+if ($end) { $end = "'$end'" } else { $end = '*' }
+
 opendir my $DIR, '.';
 my @stats = grep { /^stats-.+out$/ } readdir $DIR;
 #my @stats = grep { /\.tsv$/ } readdir $DIR;
@@ -46,6 +51,7 @@ if ($title =~ /^Forest/) {
     print $plot "set xlabel 'Time'\n";
     print $plot "set timefmt '%Y-%m-%d %H:%M:%S'\n";
     print $plot "set xdata time\n";
+    print $plot "set xrange [$start:$end]\n";
     print $plot "set ylabel '$ylabel'\n";
     print $plot "set yrange [0:*]\n";
     my @plots = ();
