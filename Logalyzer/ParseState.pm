@@ -121,6 +121,7 @@ my $_event_info = {
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
     'keystore' => { op => 'sum',  label => 'keystore messages'},
     'deadlock' => { op => 'count',  label => 'deadlock messages'},
+    'quorum' => { op => 'avg',  label => 'quorum avg'},
     'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
     'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
     'backup' => { op => 'count',  label => 'backup messages' },
@@ -643,6 +644,8 @@ sub classify_line {
             push @$events, { classify => 'config', op => 'count', };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
+        } elsif ($text =~ /^Detect.* quorum \((\d+) /) {
+            push @$events, { classify => 'quorum', value => $1 };
         } elsif ($text =~ / REQUEST: /) {
             push @$events, { classify => 'REQUEST', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
