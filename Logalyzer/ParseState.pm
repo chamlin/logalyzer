@@ -770,6 +770,15 @@ sub dump_stats_new {
             print $stats_fh (join ($self->{separator}, @vals), "\n");
         }
     }
+
+    my $event_counts_filename = $self->{outdir} . '/event-counts.out';
+    my $counts_fh = $self->get_fh ($event_counts_filename);
+    foreach my $event (sort { $self->{events_seen}{$b} <=> $self->{events_seen}{$a} } keys %{$self->{events_seen}}) {
+        print $counts_fh "$event:  $self->{events_seen}{$event}.\n";
+        # print STDERR "$event $self->{events_seen}{$event}.\n";
+    }
+    $self->close_fh ($event_counts_filename);
+
 }
 
 sub dump_stats {
