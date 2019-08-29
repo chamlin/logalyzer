@@ -116,6 +116,8 @@ my $_event_info = {
     'mem-unclosed-mb' => { op => 'avg',  label => 'unclosed MB' },
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' },
     'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
+    'db-state' => { op => 'count',  label => 'db on/offline events' },
+    'config' => { op => 'count',  label => 'config events' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
@@ -124,6 +126,8 @@ my $_event_info = {
     'quorum' => { op => 'avg',  label => 'quorum avg'},
     'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
     'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
+    'ops-dir' => { op => 'count',  label => 'ops-dir' },
+    'meters' => { op => 'count',  label => 'meters' },
     'backup' => { op => 'count',  label => 'backup messages' },
     'start-backup' => { op => 'count',  label => 'start backup messages' },
     default => { op => 'count',  label => 'count' },
@@ -492,6 +496,7 @@ sub classify_line {
         # levels
         if ($self->{levels}{$level} >= $self->{min_level_number}) {
             push @$events, { classify => $level, op => 'count', value => 1 };
+            # in this case, don't need anything granular beyond level
         }
         if (index ($text, 'XDQP') >= 1) {
             push @$events, { classify => 'XDQP', op => 'count', value => 1 };
@@ -527,6 +532,14 @@ sub classify_line {
         } elsif ($text =~ m/^Slow /) {
             push @$events, (
                 { classify => 'slow-count', value => 1 },
+            );
+        } elsif ($text =~ m/to Ops Director/) {
+            push @$events, (
+                { classify => 'ops-dir', value => 1 },
+            );
+        } elsif ($text =~ m/expired .* meters documents/) {
+            push @$events, (
+                { classify => 'meters', value => 1 },
             );
         } elsif ($text =~ m/^Memory (\d+)%/) {
             my ($mem_p, $phys_k, $rest) = ($text =~ m/^Memory (\d+)% phys=(\d+) (.*)/);
@@ -640,12 +653,14 @@ sub classify_line {
             push @$events, { classify => 'saving', op => 'count', };
         } elsif ($text =~ /^(Detecting|Detected) (indexes|compat[ai]bility) /) {
             push @$events, { classify => 'detecting' };
-        } elsif ($text =~ /^New configuration state retrieved/) {
-            push @$events, { classify => 'config', op => 'count', };
+        } elsif ($text =~ /^New configuration state retrieved/ || $level eq 'Config') {
+            push @$events, { classify => 'config' };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
         } elsif ($text =~ /^Detect.* quorum \((\d+) /) {
             push @$events, { classify => 'quorum', value => $1 };
+        } elsif ($text =~ /Database .* is (on|off)line/) {
+            push @$events, { classify => 'db-state' };
         } elsif ($text =~ / REQUEST: /) {
             push @$events, { classify => 'REQUEST', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
@@ -668,7 +683,7 @@ sub classify_line {
             }
         }
         # default
-        unless (scalar @$events) {
+        unless (scalar (@$events) || $classified) {
             $line_info->{events} = [{ classify => 'misc', 'op' => 'count' }];
         }
     } elsif (length ($line) > 0) {
