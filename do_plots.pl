@@ -10,8 +10,8 @@ my $state = new Logalyzer::ParseState();
 
 my ($start, $end) = @ARGV;
 
-if ($start) { $start = "'$start'" } else { $start = '*' }
-if ($end) { $end = "'$end'" } else { $end = '*' }
+if ($start) { $start =~ s/T/ /; $start = "'$start'" } else { $start = '*' }
+if ($end) { $end =~ s/T/ /; $end = "'$end'" } else { $end = '*' }
 
 opendir my $DIR, '.';
 my @stats = grep { /^stats-.+out$/ } readdir $DIR;
