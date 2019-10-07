@@ -8,6 +8,11 @@ use Logalyzer::ParseState;
 
 my $state = new Logalyzer::ParseState();
 
+my ($start, $end) = @ARGV;
+
+if ($start) { $start =~ s/T/ /; $start = "'$start'" } else { $start = '*' }
+if ($end) { $end =~ s/T/ /; $end = "'$end'" } else { $end = '*' }
+
 opendir my $DIR, '.';
 my @stats = grep { /^stats-.+out$/ } readdir $DIR;
 #my @stats = grep { /\.tsv$/ } readdir $DIR;
@@ -30,7 +35,9 @@ for (my $i = 1; $i <= $#columns; $i++) {
     my $index = $i + 1;
     my $col = $columns[$i];
     my $title = $col;
-if ($title =~ /^Forest/) { next }
+if ($title =~ /^Forest/) { 
+    next
+}
     # underbar does sub a la TeX
     $title =~ s/_/\\_/g;
     my $filename = "$col.plot";
@@ -44,6 +51,7 @@ if ($title =~ /^Forest/) { next }
     print $plot "set xlabel 'Time'\n";
     print $plot "set timefmt '%Y-%m-%d %H:%M:%S'\n";
     print $plot "set xdata time\n";
+    print $plot "set xrange [$start:$end]\n";
     print $plot "set ylabel '$ylabel'\n";
     print $plot "set yrange [0:*]\n";
     my @plots = ();
