@@ -4,6 +4,8 @@ package Logalyzer::ParseState;
 
 use Data::Dumper;
 
+use List::Util qw (sum);
+
 my $_prefixes = {
     ADMIN => 1,
     ALERT => 1,
@@ -58,29 +60,77 @@ my $_levels = {
 };
 
 my $_event_info = {
-    'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)' },
+    'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)', no_dump => 1 },
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
     'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
-    'journaling-count' => { op => 'count', label => 'slow journal time (message count)' },
+    'journaling-count' => { op => 'count', label => 'slow journal time (message count)', no_dump => 1 },
+    'journal-stuff' => { op => 'count', label => 'general journal messages' },
     'jlag-semaphore' => { op => 'sum', label => 'journal lag time, semaphore (ms total)' },
-    'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)' },
+    'jlag-semaphore-count' => { op => 'count', label => 'journal lag time, semaphore (message count)', no_dump => 1 },
     'jlag-disk' => { op => 'sum', label => 'journal lag time, disk (ms total)' },
-    'jlag-disk-count' => { op => 'count', label => 'journal lag time, disk (message count)' },
+    'jlag-disk-count' => { op => 'count', label => 'journal lag time, disk (message count)', no_dump => 1 },
     'jlag-jarchive' => { op => 'sum', label => 'journal lag time, archiving (ms total)' },
-    'jlag-jarchive-count' => { op => 'count', label => 'journal lag time, archiving (message count)' },
+    'jlag-jarchive-count' => { op => 'count', label => 'journal lag time, archiving (message count)', no_dump => 1 },
     'jlag-dbrep' => { op => 'sum', label => 'journal lag time, dbrep (ms total)' },
-    'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)' },
+    'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)', no_dump => 1 },
     'jlag-localrep' => { op => 'sum', label => 'journal lag time, local rep (ms total)' },
-    'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)' },
-    merge => { op => 'sum',  label => 'total (MB)' },
-    'merge-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)', no_dump => 1 },
+     merge => { op => 'sum',  label => 'total (MB)' },
+    'merge-size' => { op => 'avg',  label => 'mean size (MB)' },
+    'merge-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
+    'merge-count' => { op => 'count', no_dump => 1 },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'delete-count' => { op => 'count', label => 'delete (count)', no_dump => 1 },
     save => { op => 'sum',  label => 'total (MB)' },
-    'save-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'save-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
+    'detecting' => { op => 'count',  label => 'detecting messages' },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (s)' },
+    logline => { op => 'count',  label => 'logged line', no_dump => 1 },
     rollback => { op => 'count',  label => 'rollback (messages)' },
+    'authticket-update-avg' => { op => 'avg',  label => 'avg ms' },
+    'authticket-get-feed-avg' => { op => 'avg',  label => 'avg ms' },
+    'mem-percent' => { op => 'avg',  label => 'mem %' },
+    'mem-mb' => { op => 'avg',  label => 'mem MB' },
+    'mem-swap-p' => { op => 'avg',  label => 'swap %' },
+    'mem-swap-mb' => { op => 'avg',  label => 'swap MB' },
+    'mem-virt-p' => { op => 'avg',  label => 'virt %' },
+    'mem-virt-mb' => { op => 'avg',  label => 'virt MB' },
+    'mem-rss-p' => { op => 'avg',  label => 'rss %' },
+    'mem-rss-mb' => { op => 'avg',  label => 'rss MB' },
+    'mem-anon-p' => { op => 'avg',  label => 'anon %' },
+    'mem-anon-mb' => { op => 'avg',  label => 'anon MB' },
+    'mem-file-p' => { op => 'avg',  label => 'file %' },
+    'mem-file-mb' => { op => 'avg',  label => 'file MB' },
+    'mem-forest-p' => { op => 'avg',  label => 'forest %' },
+    'mem-forest-mb' => { op => 'avg',  label => 'forest MB' },
+    'mem-cache-p' => { op => 'avg',  label => 'cache %' },
+    'mem-cache-mb' => { op => 'avg',  label => 'cache MB' },
+    'mem-registry-p' => { op => 'avg',  label => 'registry %' },
+    'mem-registry-mb' => { op => 'avg',  label => 'registry MB' },
+    'mem-huge-p' => { op => 'avg',  label => 'huge %' },
+    'mem-huge-mb' => { op => 'avg',  label => 'huge MB' },
+    'mem-join-p' => { op => 'avg',  label => 'join %' },
+    'mem-join-mb' => { op => 'avg',  label => 'join MB' },
+    'mem-unclosed-p' => { op => 'avg',  label => 'unclosed %' },
+    'mem-unclosed-mb' => { op => 'avg',  label => 'unclosed MB' },
+    'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' },
+    'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' },
+    'db-state' => { op => 'count',  label => 'db on/offline events' },
+    'config' => { op => 'count',  label => 'config events' },
+    'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
+    'slow-count' => { op => 'sum',  label => 'slow messages' },
+    'stand-stuff' => { op => 'sum',  label => 'stand messages'},
+    'keystore' => { op => 'sum',  label => 'keystore messages'},
+    'deadlock' => { op => 'count',  label => 'deadlock messages'},
+    'quorum' => { op => 'avg',  label => 'quorum avg'},
+    'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
+    'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
+    'ops-dir' => { op => 'count',  label => 'ops-dir' },
+    'meters' => { op => 'count',  label => 'meters' },
+    'backup' => { op => 'count',  label => 'backup messages' },
+    'start-backup' => { op => 'count',  label => 'start backup messages' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -113,12 +163,25 @@ sub new {
     return bless $blank, $class;
 }
 
+sub PT_to_seconds {
+    my ($test) = @_;
+    my ($h, $m, $s) = ($test =~ /PT(?:(\d+)H)?(?:(\d+)M)?(?:([0-9.]+)S)?/);
+    unless (defined $h) { $h = 0 }
+    unless (defined $m) { $m = 0 }
+    unless (defined $s) { $s = 0 }
+    my $seconds = $h * 3600 + $m * 60 + $s;
+    return $seconds;
+}
+
 # get it, open if needed.
 sub get_fh {
     my ($self, $outfile) = @_;
     my $out = $self->{fh}{$outfile};
     unless ($out) {
-        open ($out, '>', $outfile) or die "Can't open $outfile.\n";
+        unless (open ($out, '>', $outfile)) {
+            print STDERR Dumper $self;
+            die "Can't open $outfile.\n";
+        }
         print STDERR "> $outfile\n";
         $self->{fh}{$outfile} = $out;
     }
@@ -151,7 +214,7 @@ sub event_label {
     if (exists $self->{event_info}{$event}{label}) {
         return $self->{event_info}{$event}{label};
     }
-    return $self->{event_info}{default}{op};
+    return $event
 }
 
 sub event_op { 
@@ -165,7 +228,7 @@ sub event_op {
 
 sub get_logfile_keyxx {
     my ($state, $filename) = @_;
-    $filename =~ /ganymede-([ed]\d+)/;
+    $filename =~ /(psml\dc\d\d\d)/;
     return $1;
 }
 
@@ -346,6 +409,8 @@ sub process_line {
         } else {
             die "Unknown op $op for line", Dumper ($line_info), ".\n";
         }
+        # add the filename_index to see log continuity
+        $stats->{$line_info->{grouping_time}}{logline} = $self->{file_info}{$min->{key}}{filename_index};
     }
 
     $self->dump_line ($min);
@@ -365,6 +430,9 @@ sub dump_line {
         $line_info->{line},
     ));
     foreach my $event (@{$line_info->{events}}) {
+        my $class = $event->{classify};
+        # don't print out some stuff
+        if ($self->{event_info}{$class}{no_dump})  { next }
         my $outfile = $self->{outdir} . '/' . $event->{classify};
         # file is outdir/log-as
         # line is time line (logfile)
@@ -429,36 +497,119 @@ sub classify_line {
         # levels
         if ($self->{levels}{$level} >= $self->{min_level_number}) {
             push @$events, { classify => $level, op => 'count', value => 1 };
+            # in this case, don't need anything granular beyond level
         }
         if (index ($text, 'XDQP') >= 1) {
             push @$events, { classify => 'XDQP', op => 'count', value => 1 };
         }
-        # cms
-        if ($text =~ /STARTING EVENT-INSERT/) {
-            push @$events, { classify => 'event-insert', op => 'count', value => 1 };
+        if ($text =~ /UserName=.*\*\*\*\*([^*]+?)\*\*\*\*.*TIME\s(\d+\.\d+)/) {
+            my ($call, $time) = ($1, $2);
+            $call =~ s/API PROCESS TIME//;
+            $call =~ s/\s//g;
+            push @$events, { classify => $call, value => $time };
+        } elsif ($text =~ /-api-authticket: .*maxhits greater than/) {
+            push @$events, { classify => "authticket-maxhits", };
         }
         if ($text =~ /unable to configure logging/) {
             push @$events, { classify => 'logging-configure', op => 'count', value => 1 };
         }
+        if ($text =~ /^\[Event:id=([^]]+)/) {
+            my $trace_event = "Event-$1";  $trace_event =~ s/[ :;,]/-/; 
+            push @$events, { classify => $trace_event, };
+        }
         # other stuff
-        if ($text =~ /^Merged (\d+) MB in \d+ sec at (\d+) MB/) {
+        if ($text =~ /^Merged (\d+) MB (in \d+ sec )?at (\d+) MB\/sec to (.+)\/[^\/]+$/) {
+            my ($mb, $junk, $rate, $stand) = ($1, $2, $3, $4);
             push @$events, (
-                { classify => 'merge', op => 'sum', value => $1 },
-                { classify => 'merge-rate', op => 'avg', value => $2 },
+                { classify => 'merge', op => 'sum', value => $mb },
+                { classify => 'merge-count', value => 1 },
+                { classify => 'merge-size', value => $mb },
+                { classify => 'merge-rate', value => $rate },
             );
-        } elsif ($text =~ /^Deleted (\d+) MB in \d+ sec at (\d+) MB/) {
+            #if ($s > 2) { push @$events, { classify => 'merge-rate', op => 'avg', value => $2 } }
+            open my $csv, '>>', 'merge-rate-vs-size.csv';
+            print $csv "$rate,$mb\n";
+            close $csv;
+        } elsif ($text =~ m/^Slow /) {
+            push @$events, (
+                { classify => 'slow-count', value => 1 },
+            );
+        } elsif ($text =~ m/to Ops Director/) {
+            push @$events, (
+                { classify => 'ops-dir', value => 1 },
+            );
+        } elsif ($text =~ m/expired .* meters documents/) {
+            push @$events, (
+                { classify => 'meters', value => 1 },
+            );
+        } elsif ($text =~ m/^Memory (\d+)%/) {
+            my ($mem_p, $phys_k, $rest) = ($text =~ m/^Memory (\d+)% phys=(\d+) (.*)/);
+            my %values = (
+                'mem-percent' => $mem_p,
+                'mem-mb' => $phys_k,
+            );
+            #my ($mem_p, $mem_phys_k, $mem_virt_k, $mem_virt_p, $mem_rss) = ($1, $2, $3, $4);
+            foreach $stat (split /\s/, $rest) {
+                my ($name, $value_k, $value_p) = ($stat =~ /(\w+)=(\d+)\((\d+)%\)/);
+                #print "$stat: $name, $value_k, $value_p\n";
+                $values{'mem-'.$name.'-mb'} = $value_k;
+                $values{'mem-'.$name.'-p'} = $value_p;
+            }
+            foreach $stat (keys %values) {
+                push @$events, (
+                    { classify => $stat, value => $values{$stat} },
+                );
+            }
+            my $big_sum = 0;
+            foreach $value ('mem-huge-p', 'mem-anon-p', 'mem-swap-p', 'mem-file-p') {
+                if (exists $values{$value}) { $big_sum += $values{$value} }
+            }
+            if ($big_sum) {
+                push @$events, (
+                    { classify => 'mem-huge-anon-swap-file-p', value => $big_sum },
+                );
+            }
+            if (exists $values{'mem-forest-p'} && exists $values{'mem-cache-p'}) {
+                push @$events, (
+                    { classify => 'mem-forest-cache-p', value => ($values{'mem-forest-p'} + $values{'mem-cache-p'}) },
+                );
+            }
+#die Dumper \%values; 
+        
+        } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
                 { classify => 'delete-rate', op => 'avg', value => $2 },
+                { classify => 'delete-count', value => 1 },
             );
-        } elsif ($text =~ /^Saved (\d+) MB in \d+ sec at (\d+) MB/) {
+        } elsif ($text =~ /^Saved (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'save', op => 'sum', value => $1 },
                 { classify => 'save-rate', op => 'avg', value => $2 },
             );
+        } elsif ($text =~ /^Keystore: /) {
+            push @$events, (
+                { classify => 'keystore', value => 1 },
+            );
+        } elsif ($text =~ /^((Closing|Creating) journal|JournalBackup)/) {
+            push @$events, (
+                { classify => 'journal-stuff', value => 1 },
+            );
+        } elsif ($text =~ /^(~?)(OnDiskStand|InMemoryStand)/) {
+            push @$events, (
+                { classify => 'stand-stuff', value => 1 },
+            );
+            my ($tilde, $op) = ($1, $2);
+            if ($op eq 'OnDiskStand' && ! $tilde) {
+                 push @$events, { classify => 'on-disk-stand' };
+            } elsif ($op eq 'InMemoryStand' && ! $tilde) {
+                 push @$events, { classify => 'in-memory-stand' };
+            }
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
+        } elsif ($text =~ /^Deadlock /) {
+            push @$events, { classify => 'deadlock', value => 1 };
         } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
             push @$events, { classify => 'canary', op => 'sum', value => $1 };
         } elsif ($text =~ /^Forest (\S+) state/) {
@@ -468,7 +619,9 @@ sub classify_line {
         # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
         # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
         # 
-        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
+        } elsif ($text =~ /Rebalanced .* at (\d+) fragments\/sec/) {
+            push @$events, { classify => 'rebalance', op => 'avg', value => $1 };
+        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
             push @$events, { classify => 'journaling', value => $1 };
             push @$events, { classify => 'journaling-count' };
             if ($2) {
@@ -500,16 +653,21 @@ sub classify_line {
             push @$events, { classify => 'merging', op => 'count', };
         } elsif ($text =~ /^Saving /) {
             push @$events, { classify => 'saving', op => 'count', };
-        } elsif ($text =~ /^Detecting (indexes|compatability) for database/) {
-            push @$events, { classify => 'detecting', op => 'count', };
-        } elsif ($text =~ /^New configuration state retrieved/) {
-            push @$events, { classify => 'config', op => 'count', };
+        } elsif ($text =~ /^(Detecting|Detected) (indexes|compat[ai]bility) /) {
+            push @$events, { classify => 'detecting' };
+        } elsif ($text =~ /^New configuration state retrieved/ || $level eq 'Config') {
+            push @$events, { classify => 'config' };
         } elsif ($text =~ /^Retrying /) {
             push @$events, { classify => 'retry', op => 'count', };
+        } elsif ($text =~ /^Detect.* quorum \((\d+) /) {
+            push @$events, { classify => 'quorum', value => $1 };
+        } elsif ($text =~ /Database .* is (on|off)line/) {
+            push @$events, { classify => 'db-state' };
         } elsif ($text =~ / REQUEST: /) {
             push @$events, { classify => 'REQUEST', op => 'count', };
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
-            push @$events, { classify => 'backup', op => 'count', };
+            if ($1 =~ /^Start/) { push @$events, { classify => 'start-backup' } }
+            push @$events, { classify => 'backup' };
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
         }
@@ -527,7 +685,7 @@ sub classify_line {
             }
         }
         # default
-        unless (scalar @$events) {
+        unless (scalar (@$events) || $classified) {
             $line_info->{events} = [{ classify => 'misc', 'op' => 'count' }];
         }
     } elsif (length ($line) > 0) {
@@ -540,6 +698,7 @@ sub classify_line {
 sub init_files {
     my ($self) = @_;
 # init stats, init fh
+    my $filename_index = 0;
     foreach my $filename (@{$self->{filenames}}) {
         my $key = $self->get_logfile_key ($filename);
         my $fh = undef;
@@ -552,11 +711,13 @@ sub init_files {
             'lines_read' => 0,
             'date_time' => '1900-01-01 00:00:00',
             'grouping_time' => $self-> grouping_time ('1900-01-01 00:00:00'),
+            'filename_index' => $filename_index,
         };
         $self->{file_info}{$filename} = $file_info;
         # read list, removed when done
         push @{$self->{logfh}}, $file_info;
         $self->get_log_line ($filename);
+        $filename_index++;
     }
 };
 
@@ -611,6 +772,15 @@ sub dump_stats_new {
             print $stats_fh (join ($self->{separator}, @vals), "\n");
         }
     }
+
+    my $event_counts_filename = $self->{outdir} . '/event-counts.out';
+    my $counts_fh = $self->get_fh ($event_counts_filename);
+    foreach my $event (sort { $self->{events_seen}{$b} <=> $self->{events_seen}{$a} } keys %{$self->{events_seen}}) {
+        print $counts_fh "$event:  $self->{events_seen}{$event}.\n";
+        # print STDERR "$event $self->{events_seen}{$event}.\n";
+    }
+    $self->close_fh ($event_counts_filename);
+
 }
 
 sub dump_stats {
@@ -654,7 +824,8 @@ sub get_stats_value {
     if ($op eq 'avg') {
         my $sum = 0;
         foreach my $stat (@$stats) { $sum += $stat }
-        $retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+        #$retval = int ( ($sum / scalar (@$stats)) + 0.5 );
+        $retval = $sum / scalar (@$stats);
     } elsif ($op eq 'sum') {
         # summed as part of classification
         $retval = $stats;
