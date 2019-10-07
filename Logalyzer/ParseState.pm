@@ -81,6 +81,7 @@ my $_event_info = {
     'merge-count' => { op => 'count', no_dump => 1 },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)' },
+    'delete-count' => { op => 'count', label => 'delete (count)', no_dump => 1 },
     save => { op => 'sum',  label => 'total (MB)' },
     'save-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'detecting' => { op => 'count',  label => 'detecting messages' },
@@ -579,6 +580,7 @@ sub classify_line {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
                 { classify => 'delete-rate', op => 'avg', value => $2 },
+                { classify => 'delete-count', value => 1 },
             );
         } elsif ($text =~ /^Saved (\d+) MB .*?at (\d+) MB/) {
             push @$events, (

@@ -34,8 +34,6 @@ $state->resolve_options ();
 
 $state->process_files ();
 
-#die;
-
 $state->dump_stats ();
 $state->dump_stats_new ();
 
