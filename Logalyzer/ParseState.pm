@@ -87,10 +87,12 @@ my $_event_info = {
     'detecting' => { op => 'count',  label => 'detecting messages' },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (s)' },
+    clearing => { op => 'count',  label => 'clearing expired (count)' },
     logline => { op => 'count',  label => 'logged line', no_dump => 1 },
     rollback => { op => 'count',  label => 'rollback (messages)' },
     'authticket-update-avg' => { op => 'avg',  label => 'avg ms' },
     'authticket-get-feed-avg' => { op => 'avg',  label => 'avg ms' },
+    'log-messages' => { op => 'sum',  label => 'log messages' },
     'mem-percent' => { op => 'avg',  label => 'mem %' },
     'mem-mb' => { op => 'avg',  label => 'mem MB' },
     'mem-swap-p' => { op => 'avg',  label => 'swap %' },
@@ -494,6 +496,7 @@ sub classify_line {
         foreach my $code ($self->app_code ($text)) {
             push @$events, { classify => $code, 'op' => 'count' };
         }
+        push @$events, { classify => 'log-messages', value => 1 };
         # levels
         if ($self->{levels}{$level} >= $self->{min_level_number}) {
             push @$events, { classify => $level, op => 'count', value => 1 };
@@ -594,6 +597,10 @@ sub classify_line {
         } elsif ($text =~ /^((Closing|Creating) journal|JournalBackup)/) {
             push @$events, (
                 { classify => 'journal-stuff', value => 1 },
+            );
+        } elsif ($text =~ /^Clearing expired/) {
+            push @$events, (
+                { classify => 'clearing', value => 1 },
             );
         } elsif ($text =~ /^(~?)(OnDiskStand|InMemoryStand)/) {
             push @$events, (
