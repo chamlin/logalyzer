@@ -124,6 +124,7 @@ my $_event_info = {
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' , no_dump => 1 },
     'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' , no_dump => 1 },
     'memory', => { op => 'count',  label => 'memory messages' },
+    'memory-low', => { op => 'count',  label => 'memory low messages' },
     'db-state' => { op => 'count',  label => 'db on/offline events' },
     'config' => { op => 'count',  label => 'config events' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
@@ -139,6 +140,8 @@ my $_event_info = {
     'meters' => { op => 'count',  label => 'meters' },
     'backup' => { op => 'count',  label => 'backup messages' },
     'start-backup' => { op => 'count',  label => 'start backup messages' },
+    'backup' => { op => 'count',  label => 'backup messages' },
+    'telemetry' => { op => 'count',  label => 'telemetry messages' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -559,6 +562,16 @@ sub classify_line {
         } elsif ($text =~ m/expired .* meters documents/) {
             push @$events, (
                 { classify => 'meters', value => 1 },
+            );
+            $classified++;
+        } elsif ($text =~ m/Telemetry/) {
+            push @$events, (
+                { classify => 'telemetry', value => 1 },
+            );
+            $classified++;
+        } elsif ($text =~ m/^Memory low:/) {
+            push @$events, (
+                { classify => 'memory-low', value => 1 },
             );
             $classified++;
         } elsif ($text =~ m/^Memory (\d+)%/) {
