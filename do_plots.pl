@@ -52,6 +52,12 @@ if ($title =~ /^Forest/) {
     print $plot "set timefmt '%Y-%m-%d %H:%M:%S'\n";
     print $plot "set xdata time\n";
     print $plot "set xrange [$start:$end]\n";
+    #print $plot "set xtics '2020-03-11 00:00:00', '2020-03-12 00:00:00', '2020-03-13 24:00:00'\n";
+    #print $plot "set xtics format '%H'\n";
+    #print $plot "set xtics '2020-03-11 00:00:00',  86400, '2020-03-13 24:00:00'\n";
+    #print $plot "set xtics 8640\n";  # hour
+    #print $plot "set xtics 86400\n";  # day
+    #print $plot "set xtics 43200\n";  # day
     print $plot "set ylabel '$ylabel'\n";
     print $plot "set yrange [0:*]\n";
     my @plots = ();

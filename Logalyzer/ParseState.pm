@@ -66,6 +66,7 @@ my $_levels = {
 my $_event_info = {
     'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)', no_dump => 1 },
     'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
+    'timestamp' => { op => 'sum', label => 'timestamp keyword (count)' },
     'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
     'journaling-count' => { op => 'count', label => 'slow journal time (message count)', no_dump => 1 },
     'journal-stuff' => { op => 'count', label => 'general journal messages' },
@@ -130,6 +131,7 @@ my $_event_info = {
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
+    'no-space' => { op => 'count',  label => 'no space'},
     'security' => { op => 'count',  label => 'security messages'},
     'deadlock' => { op => 'count',  label => 'deadlock messages'},
     'replication' => { op => 'count',  label => 'replication messages'},
@@ -420,6 +422,10 @@ sub process_line {
         } else {
             die "Unknown op $op for line", Dumper ($line_info), ".\n";
         }
+        # per-node logging
+        my $node_event_key = "node-$min->{key}";
+        $stats->{$line_info->{grouping_time}}{$node_event_key} += 1;
+        $self->{events_seen}{$node_event_key} += 1;
         # add the filename_index to see log continuity
         $stats->{$line_info->{grouping_time}}{logline} = $self->{file_info}{$min->{key}}{filename_index};
     }
@@ -630,11 +636,12 @@ sub classify_line {
                 { classify => 'replication', value => 1 },
             );
             $classified++;
-        } elsif ($text =~ /[tT]imestamp/) {
+        } elsif ($text =~ /[tT]imestampXXX/) {
             push @$events, (
+                # don't marked classified, otherwise short-circuits the timestamp-lag classification
+                # this is breaking the timestamp-lag, and isn't as useful anyway, so not in for now
                 { classify => 'timestamp', value => 1 },
             );
-            $classified++;
         } elsif ($text =~ /^(Keystore: |External Security)/) {
             push @$events, (
                 { classify => 'security', value => 1 },
@@ -694,6 +701,9 @@ sub classify_line {
         # 
         } elsif ($text =~ /Rebalanced .* at (\d+) fragments\/sec/) {
             push @$events, { classify => 'rebalance', op => 'avg', value => $1 };
+            $classified++;
+        } elsif ($text =~ /No space left on device/) {
+            push @$events, { classify => 'no-space', value => 1 };
             $classified++;
         } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
             push @$events, { classify => 'journaling', value => $1 };
@@ -793,6 +803,12 @@ sub init_files {
         my $fh = undef;
         open ($fh, '<', $filename) or die "Can't open $filename ($!).\n";
         print STDERR '< ', $filename, " (key: $key)\n";
+        # dynamically add the logging counts as events.
+        $self->{event_info}{"node-$key"} = {
+            op => 'count',
+            label => "$key log messages",
+            no_dump => 1
+        };
         my $file_info = {
             'filename' => $filename,
             'key' => $key,
