@@ -542,7 +542,7 @@ sub classify_line {
             $classified++;
         }
         # other stuff
-        if ($text =~ /^Merged (\d+) MB (in \d+ sec )?at (\d+) MB\/sec to (.+)\/[^\/]+$/) {
+        if ($text =~ /^Merged (\d+) MB (in \d+ sec )?at (\d+) MB\/sec to (.+)(\/|\\)[^\/\\]+$/) {
             my ($mb, $junk, $rate, $stand) = ($1, $2, $3, $4);
             push @$events, (
                 { classify => 'merge', op => 'sum', value => $mb },
