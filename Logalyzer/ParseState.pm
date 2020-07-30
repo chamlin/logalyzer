@@ -84,6 +84,7 @@ my $_event_info = {
     'merge-size' => { op => 'avg',  label => 'mean size (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'merge-count' => { op => 'count', no_dump => 1 },
+    'merge-length' => { op => 'max', label => 'max length (s)', no_dump => 1 },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'delete-count' => { op => 'count', label => 'delete (count)', no_dump => 1 },
@@ -413,6 +414,10 @@ sub process_line {
             $stats->{$line_info->{grouping_time}}{$event} += $classify->{value};
         } elsif ($op eq 'avg') {
             push @{$stats->{$line_info->{grouping_time}}{$event}}, $classify->{value};
+        } elsif ($op eq 'max') {
+            if (!exists ($stats->{$line_info->{grouping_time}}{$event}) || $stats->{$line_info->{grouping_time}}{$event} < $classify->{value}) {
+                $stats->{$line_info->{grouping_time}}{$event} = $classify->{value};
+            }
         } elsif ($op eq 'count') {
             if (exists $stats->{$line_info->{grouping_time}}{$event}) {
                 $stats->{$line_info->{grouping_time}}{$event}++;
@@ -550,6 +555,9 @@ sub classify_line {
                 { classify => 'merge-size', value => $mb },
                 { classify => 'merge-rate', value => $rate },
             );
+            if ($junk && $junk =~ /in (\d+) sec/) {
+                push @$events, { classify => 'merge-length', value => $1 };
+            }
             #if ($s > 2) { push @$events, { classify => 'merge-rate', op => 'avg', value => $2 } }
             open my $csv, '>>', 'merge-rate-vs-size.csv';
             print $csv "$rate,$mb\n";
@@ -936,6 +944,9 @@ sub get_stats_value {
         $retval = $stats;
     } elsif ($op eq 'count') {
         # counted as part of classification
+        $retval = $stats;
+    } elsif ($op eq 'max') {
+        # checked as part of classification
         $retval = $stats;
     } else {
         print STDERR "Can't get val for $event with op $op.\n";
