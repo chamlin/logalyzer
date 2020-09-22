@@ -88,8 +88,9 @@ my $_event_info = {
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'delete-count' => { op => 'count', label => 'delete (count)', no_dump => 1 },
-    save => { op => 'sum',  label => 'total (MB)' },
-    'save-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
+    'saved' => { op => 'sum',  label => 'total (MB)' },
+    'saved-count' => { op => 'count',  label => 'saved (count)', no_dump => 1 },
+    'saved-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'detecting' => { op => 'count',  label => 'detecting messages' },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (s)' },
@@ -145,6 +146,7 @@ my $_event_info = {
     'start-backup' => { op => 'count',  label => 'start backup messages' },
     'backup' => { op => 'count',  label => 'backup messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
+    'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -635,8 +637,9 @@ sub classify_line {
             $classified++;
         } elsif ($text =~ /^Saved (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
-                { classify => 'save', op => 'sum', value => $1 },
-                { classify => 'save-rate', op => 'avg', value => $2 },
+                { classify => 'saved', op => 'sum', value => $1 },
+                { classify => 'saved-rate', op => 'avg', value => $2 },
+                { classify => 'saved-count', value => 1 },
             );
             $classified++;
         } elsif ($text =~ /synchroniz(ation|ing|ed)/ || $text =~ /[Rr]eplicat(e|ing|ed) / || $text =~ /ForeignForest/ || $text =~ / bulk rep/  || $text =~ /oreign (master|replica)/ || $text =~ /^Cop(ying|ied) stand/) {
@@ -775,6 +778,9 @@ sub classify_line {
             $classified++;
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
+            $classified++;
+        } elsif ($text =~ /^Missing lock: /) {
+            push @$events, { classify => 'missing-lock' };
             $classified++;
         }
         if ($text =~ /java.net.ConnectException/) {
