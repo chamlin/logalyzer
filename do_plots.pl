@@ -16,6 +16,7 @@ GetOptions (
     'end=s' => \$options->{end},
     'keys=s' => \$options->{keys},
     'plots=s' => \$options->{plots},
+    'nokey' => \$options->{nokey},
 );
 
 my ($start, $end) = @$options{'start','end'};
@@ -91,6 +92,9 @@ for (my $i = 1; $i <= $#columns; $i++) {
     my $filename = "$col.plot";
     my $ylabel = $state->event_label ($col);
     open (my $plot, '>', $filename) or die "Can't open $filename.\n";
+    if ($options->{nokey}) {
+        print $plot "unset key\n";
+    }
     print $plot "set terminal pdf\n";
     print $plot "set output '$col.pdf'\n";
     print $plot "set title '$title'\n";
