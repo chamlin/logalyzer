@@ -143,10 +143,23 @@ my $_event_info = {
     'ops-dir' => { op => 'count',  label => 'ops-dir' },
     'meters' => { op => 'count',  label => 'meters' },
     'backup' => { op => 'count',  label => 'backup messages' },
+    'rebalancer-time' => { op => 'sum',  label => 'rebalancer total time (ms)' },
+    'rebalancer-run' => { op => 'count',  label => 'rebalancer runs' },
+    'rebalancer-docs' => { op => 'sum',  label => 'rebalancer docs scanned' },
     'start-backup' => { op => 'count',  label => 'start backup messages' },
     'backup' => { op => 'count',  label => 'backup messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
     'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
+    'lc-defrag-required' => { op => 'max',  label => 'lc-defrag requi (max value)', no_dump => 1 },
+    'lc-defrag-count' => { op => 'max',  label => 'lc-defrag count (max value)', no_dump => 1 },
+    'lc-defrag-segments' => { op => 'sum',  label => 'lc-defrag segments moved (sum)', no_dump => 1 },
+    'lc-defrag-words' => { op => 'sum',  label => 'lc-defrag words moved (sum)', no_dump => 1 },
+    'lc-defrag-time' => { op => 'sum',  label => 'lc-defrag ms (sum)', no_dump => 1 },
+    'etc-defrag-required' => { op => 'max',  label => 'etc-defrag requi (max value)', no_dump => 1 },
+    'etc-defrag-count' => { op => 'max',  label => 'etc-defrag count (max value)', no_dump => 1 },
+    'etc-defrag-segments' => { op => 'sum',  label => 'etc-defrag segments moved (sum)', no_dump => 1 },
+    'etc-defrag-words' => { op => 'sum',  label => 'etc-defrag words moved (sum)', no_dump => 1 },
+    'etc-defrag-time' => { op => 'sum',  label => 'etc-defrag ms (sum)', no_dump => 1 },
     default => { op => 'count',  label => 'count' },
 };
 
@@ -543,9 +556,32 @@ sub classify_line {
             push @$events, { classify => 'logging-configure', op => 'count', value => 1 };
             $classified++;
         }
+        # lets take care of all trace event processing here
         if ($text =~ /^\[Event:id=([^]]+)/) {
-            my $trace_event = "Event-$1";  $trace_event =~ s/[ :;,]/-/; 
+            my $trace_name = $1;
+            my $trace_event = "Event-$trace_name";  $trace_event =~ s/[ :;,]/-/; 
             push @$events, { classify => $trace_event, };
+            if ($trace_name eq 'Rebalancer Monitoring') {
+                my ($ms, $docs) = ($text =~ /took (\d+) msec scanning (\d+) /);
+                push @$events, { classify => 'rebalancer-time', value => $ms };
+                push @$events, { classify => 'rebalancer-docs', value => $docs };
+            } elsif ($trace_name eq 'Rebalancer State') {
+                push @$events, { classify => 'rebalancer-run', value => 1 };
+            } elsif ($trace_name eq 'CacheListStorage Defrag') {
+                my ($requi, $count, $segments_moved, $words_moved, $ms) = ($text =~ /requi=(\d+), count=(\d+), segmentsMoved=(\d+), wordsMoved=(\d+), msec=(\d+)/);
+                push @$events, { classify => 'lc-defrag-required', value => $requi };
+                push @$events, { classify => 'lc-defrag-count', value => $count };
+                push @$events, { classify => 'lc-defrag-segments', value => $segments_moved };
+                push @$events, { classify => 'lc-defrag-words', value => $words_moved };
+                push @$events, { classify => 'lc-defrag-time', value => $ms };
+            } elsif ($trace_name eq 'CacheExpandedTreeStorage Defrag') {
+                my ($requi, $count, $segments_moved, $words_moved, $ms) = ($text =~ /requi=(\d+), count=(\d+), segmentsMoved=(\d+), wordsMoved=(\d+), msec=(\d+)/);
+                push @$events, { classify => 'etc-defrag-required', value => $requi };
+                push @$events, { classify => 'etc-defrag-count', value => $count };
+                push @$events, { classify => 'etc-defrag-segments', value => $segments_moved };
+                push @$events, { classify => 'etc-defrag-words', value => $words_moved };
+                push @$events, { classify => 'etc-defrag-time', value => $ms };
+            }
             $classified++;
         }
         # other stuff
