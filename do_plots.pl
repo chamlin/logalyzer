@@ -17,6 +17,7 @@ GetOptions (
     'keys=s' => \$options->{keys},
     'plots=s' => \$options->{plots},
     'nokey' => \$options->{nokey},
+    'nonodes' => \$options->{nonodes},
 );
 
 my ($start, $end) = @$options{'start','end'};
@@ -54,6 +55,7 @@ if (scalar @key_list) {
     @stats_files = grep { $keyhash{$_} } @stats_files;
 }
 
+
 if ((scalar @stats_files) < 1) { die "no node/key files found.\n" }
 
 # assume all same run, same columns
@@ -88,6 +90,7 @@ for (my $i = 1; $i <= $#columns; $i++) {
 
     # check if plots defined
     if ($plots_defined && !$plot_hash{$col}) { print '-skipping-'; next }
+    if ($options->{nonodes} && $col =~ /^node-/) { print '-skipping-'; next }
 
     my $filename = "$col.plot";
     my $ylabel = $state->event_label ($col);
