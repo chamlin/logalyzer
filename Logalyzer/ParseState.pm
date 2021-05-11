@@ -132,6 +132,7 @@ my $_event_info = {
     'config' => { op => 'count',  label => 'config events' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
+    'forest-cleared' => { op => 'count',  label => 'forests cleared' },
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
     'no-space' => { op => 'count',  label => 'no space'},
     'security' => { op => 'count',  label => 'security messages'},
@@ -142,12 +143,18 @@ my $_event_info = {
     'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
     'ops-dir' => { op => 'count',  label => 'ops-dir' },
     'meters' => { op => 'count',  label => 'meters' },
-    'backup' => { op => 'count',  label => 'backup messages' },
     'rebalancer-time' => { op => 'sum',  label => 'rebalancer total time (ms)' },
     'rebalancer-run' => { op => 'count',  label => 'rebalancer runs' },
     'rebalancer-docs' => { op => 'sum',  label => 'rebalancer docs scanned' },
     'start-backup' => { op => 'count',  label => 'start backup messages' },
+    'restore-backup' => { op => 'count',  label => 'restore messages' },
     'backup' => { op => 'count',  label => 'backup messages' },
+    'backup-failed' => { op => 'count',  label => 'backup failed messages' },
+    'ldap' => { op => 'count',  label => 'ldap messages' },
+    'shutting-down' => { op => 'count',  label => 'shutting down messages', no_dump => 1 },
+    'forest-cleared' => { op => 'count',  label => 'forest-cleared messages', no_dump => 1 },
+    'odbc' => { op => 'count',  label => 'odbc messages' },
+    'termlist' => { op => 'count',  label => 'termlist messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
     'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
     'lc-defrag-required' => { op => 'max',  label => 'lc-defrag requi (max value)', no_dump => 1 },
@@ -731,8 +738,18 @@ sub classify_line {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
             $classified++;
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
+        } elsif ($text =~ /forest cleared|Clearing forest|Cleared forest/) {
+            push @$events, { classify => 'forest-cleared', value => 1 };
+            $classified++;
+        # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
         } elsif ($text =~ /^Deadlock /) {
             push @$events, { classify => 'deadlock', value => 1 };
+            $classified++;
+        } elsif ($text =~ /shutting down/) {
+            push @$events, { classify => 'shutting-down', value => 1 };
+            $classified++;
+        } elsif ($text =~ /forest-cleared/) {
+            push @$events, { classify => 'forest-cleared', value => 1 };
             $classified++;
         } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
             push @$events, { classify => 'canary', op => 'sum', value => $1 };
@@ -808,9 +825,26 @@ sub classify_line {
             $classified++;
         } elsif ($text =~ / REQUEST: /) {
             push @$events, { classify => 'REQUEST', op => 'count', };
+        } elsif ($text =~ /forest database backup.*failed/) {
+            push @$events, { classify => 'backup-failed' };
+            push @$events, { classify => 'backup' };
+            $classified++;
+        } elsif ($text =~ /^(Restored? forest|Finish(ing|ed) restore|Starting restore)/) {
+            if ($1 =~ /^Start/) { push @$events, { classify => 'restore-backup' } }
+            push @$events, { classify => 'restore-backup' };
+            $classified++;
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             if ($1 =~ /^Start/) { push @$events, { classify => 'start-backup' } }
             push @$events, { classify => 'backup' };
+            $classified++;
+        } elsif ($text =~ /odbc/i) {
+            push @$events, { classify => 'odbc' };
+            $classified++;
+        } elsif ($text =~ /ldap/i) {
+            push @$events, { classify => 'ldap' };
+            $classified++;
+        } elsif ($text =~ /Termlist for \d+/) {
+            push @$events, { classify => 'termlist' };
             $classified++;
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
