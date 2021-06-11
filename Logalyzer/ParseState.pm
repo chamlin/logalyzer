@@ -125,9 +125,11 @@ my $_event_info = {
     'mem-unclosed-p' => { op => 'avg',  label => 'unclosed %' , no_dump => 1 },
     'mem-unclosed-mb' => { op => 'avg',  label => 'unclosed MB' , no_dump => 1 },
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' , no_dump => 1 },
-    'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' , no_dump => 1 },
-    'memory', => { op => 'count',  label => 'memory messages' },
-    'memory-low', => { op => 'count',  label => 'memory low messages' },
+    'mem-huge-anon-swap-file-p' => { op => 'avg',  label => 'hu+an+sw+fi %' , no_dump => 1 },
+    'min-query-timestamp' => { op => 'count',  label => 'min-query-timestamp due to merge' },
+    'native-plugin-cache-manifest' => { op => 'count',  label => 'native plugin cache manifest builds' },
+    'memory' => { op => 'count',  label => 'memory messages' },
+    'memory-low' => { op => 'count',  label => 'memory low messages' },
     'db-state' => { op => 'count',  label => 'db on/offline events' },
     'config' => { op => 'count',  label => 'config events' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
@@ -607,6 +609,16 @@ sub classify_line {
             open my $csv, '>>', 'merge-rate-vs-size.csv';
             print $csv "$rate,$mb\n";
             close $csv;
+            $classified++;
+        } elsif ($text =~ m/Building new native plugin cache manifest/) {
+            push @$events, (
+                { classify => 'native-plugin-cache-manifest', value => 1 },
+            );
+            $classified++;
+        } elsif ($text =~ m/setting minQueryTimestamp .* due to merge/) {
+            push @$events, (
+                { classify => 'min-query-timestamp', value => 1 },
+            );
             $classified++;
         } elsif ($text =~ m/^Slow /) {
             push @$events, (
