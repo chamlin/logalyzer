@@ -140,7 +140,8 @@ my $_event_info = {
     'security' => { op => 'count',  label => 'security messages'},
     'deadlock' => { op => 'count',  label => 'deadlock messages'},
     'replication' => { op => 'count',  label => 'replication messages'},
-    'quorum' => { op => 'avg',  label => 'quorum avg'},
+    'copy-stand' => { op => 'count',  label => 'stand copy messages'},
+    'quorum' => { op => 'avg',  label => 'nodes detected (avg)'},
     'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
     'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
     'ops-dir' => { op => 'count',  label => 'ops-dir' },
@@ -156,6 +157,7 @@ my $_event_info = {
     'shutting-down' => { op => 'count',  label => 'shutting down messages', no_dump => 1 },
     'forest-cleared' => { op => 'count',  label => 'forest-cleared messages', no_dump => 1 },
     'odbc' => { op => 'count',  label => 'odbc messages' },
+    'bad-malloc' => { op => 'count',  label => 'bad mallocs' },
     'termlist' => { op => 'count',  label => 'termlist messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
     'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
@@ -701,6 +703,9 @@ sub classify_line {
             push @$events, (
                 { classify => 'replication', value => 1 },
             );
+            if ($text =~ /^Cop(ying|ied) stand/) {
+                push @$events, ({ classify => 'copy-stand', value => 1 });
+            }
             $classified++;
         } elsif ($text =~ /[tT]imestampXXX/) {
             push @$events, (
@@ -712,6 +717,34 @@ sub classify_line {
             push @$events, (
                 { classify => 'security', value => 1 },
             );
+            $classified++;
+        # keep this above the general journal-stuff catchall
+        # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
+        # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
+        # Warning: Forest gptm-prod-scb-content-003-3 journal frame took 30539 ms to journal (sem=0 disk=0 ja=0 dbrep=30536 ld=0): {{fsn=40534759, chksum=0xe53b3840, words=74}, op=prepare, time=1642880926, mfor=7291433594718779075, mtim=16428745074998120, mfsn=40534759, fmcl=17203506554047322778, fmf=7291433594718779075, fmt=16428745074998120, fmfsn=40534759, sk=3440966126006638955, pfo=174058648}
+        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
+            push @$events, { classify => 'journaling', value => $1 };
+            push @$events, { classify => 'journaling-count' };
+            if ($2) {
+                push @$events, { classify => 'jlag-semaphore', value => $2 };
+                push @$events, { classify => 'jlag-semaphore-count' };
+            }
+            if ($3) {
+                push @$events, { classify => 'jlag-disk', value => $3 };
+                push @$events, { classify => 'jlag-disk-count' };
+            }
+            if ($4) {
+                push @$events, { classify => 'jlag-jarchive', value => $4 };
+                push @$events, { classify => 'jlag-jarchive-count' };
+            }
+            if ($5) {
+                push @$events, { classify => 'jlag-dbrep', value => $5 };
+                push @$events, { classify => 'jlag-dbrep-count' };
+            }
+            if ($6) {
+                push @$events, { classify => 'jlag-localrep', value => $6 };
+                push @$events, { classify => 'jlag-localrep-count' };
+            }
             $classified++;
         } elsif (
             $text =~ /^((Closing|Creating) journal|JournalBackup)/
@@ -772,38 +805,12 @@ sub classify_line {
         } elsif ($text =~ /^(Unm|M)ounted /) {
             push @$events, { classify => 'mount', op => 'count', };
             $classified++;
-        # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
-        # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
         # 
         } elsif ($text =~ /Rebalanced .* at (\d+) fragments\/sec/) {
             push @$events, { classify => 'rebalance', op => 'avg', value => $1 };
             $classified++;
         } elsif ($text =~ /No space left on device/) {
             push @$events, { classify => 'no-space', value => 1 };
-            $classified++;
-        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
-            push @$events, { classify => 'journaling', value => $1 };
-            push @$events, { classify => 'journaling-count' };
-            if ($2) {
-                push @$events, { classify => 'jlag-semaphore', value => $2 };
-                push @$events, { classify => 'jlag-semaphore-count' };
-            }
-            if ($3) {
-                push @$events, { classify => 'jlag-disk', value => $3 };
-                push @$events, { classify => 'jlag-disk-count' };
-            }
-            if ($4) {
-                push @$events, { classify => 'jlag-jarchive', value => $4 };
-                push @$events, { classify => 'jlag-jarchive-count' };
-            }
-            if ($5) {
-                push @$events, { classify => 'jlag-dbrep', value => $5 };
-                push @$events, { classify => 'jlag-dbrep-count' };
-            }
-            if ($6) {
-                push @$events, { classify => 'jlag-localrep', value => $6 };
-                push @$events, { classify => 'jlag-localrep-count' };
-            }
             $classified++;
         } elsif ($text =~ / rolling back/) {
             push @$events, { classify => 'rollback', value => $1 };
@@ -867,6 +874,10 @@ sub classify_line {
         }
         if ($text =~ /java.net.ConnectException/) {
             push @$events, { classify => "java.net.ConnectException", op => 'count', };
+            $classified++;
+        }
+        if ($text =~ /Bad malloc/) {
+            push @$events, { classify => "bad-malloc" };
             $classified++;
         }
         if ($text =~ /orest (\S\S+)/) {
