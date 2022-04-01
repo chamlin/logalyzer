@@ -161,6 +161,8 @@ my $_event_info = {
     'termlist' => { op => 'count',  label => 'termlist messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
     'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
+    'frags-reindexed-refragmented' => { op => 'sum',  label => 'fragments reindexed/refragmented' },
+    'frags-reindexed-rate' => { op => 'avg',  label => 'reindexing/refragmenting (avg frag/s)' },
     'lc-defrag-required' => { op => 'max',  label => 'lc-defrag requi (max value)', no_dump => 1 },
     'lc-defrag-count' => { op => 'max',  label => 'lc-defrag count (max value)', no_dump => 1 },
     'lc-defrag-segments' => { op => 'sum',  label => 'lc-defrag segments moved (sum)', no_dump => 1 },
@@ -697,6 +699,12 @@ sub classify_line {
                 { classify => 'saved', op => 'sum', value => $1 },
                 { classify => 'saved-rate', op => 'avg', value => $2 },
                 { classify => 'saved-count', value => 1 },
+            );
+            $classified++;
+        } elsif ($text =~ /^Re(?:fragmented|indexed) .* (\d+) fragments in \d+ sec at (\d+) /) {
+            push @$events, (
+                { classify => 'frags-reindexed-refragmented', value => $1 },
+                { classify => 'frags-reindexed-rate', value => $2 },
             );
             $classified++;
         } elsif ($text =~ /synchroniz(ation|ing|ed)/ || $text =~ /[Rr]eplicat(e|ing|ed) / || $text =~ /ForeignForest/ || $text =~ / bulk rep/  || $text =~ /oreign (master|replica)/ || $text =~ /^Cop(ying|ied) stand/) {
