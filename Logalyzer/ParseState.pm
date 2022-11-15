@@ -161,6 +161,7 @@ my $_event_info = {
     'termlist' => { op => 'count',  label => 'termlist messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
     'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
+    'checkpoint-token' => { op => 'count',  label => 'checkpoint-token messages' },
     'frags-reindexed-refragmented' => { op => 'sum',  label => 'fragments reindexed/refragmented' },
     'frags-reindexed-rate' => { op => 'avg',  label => 'reindexing/refragmenting (avg frag/s)' },
     'lc-defrag-required' => { op => 'max',  label => 'lc-defrag requi (max value)', no_dump => 1 },
@@ -878,6 +879,9 @@ sub classify_line {
             $classified++;
         } elsif ($text =~ /^Missing lock: /) {
             push @$events, { classify => 'missing-lock' };
+            $classified++;
+        } elsif ($text =~ /^Forest\s\S+\scheckpoint token=/) {
+            push @$events, { classify => 'checkpoint-token' };
             $classified++;
         }
         if ($text =~ /java.net.ConnectException/) {
