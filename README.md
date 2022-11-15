@@ -17,5 +17,12 @@ Goal:  decent, fast.
   - Junk events by regex.
   - Pretty fast.
   - requires only basic perl, plots require gnuplot
-  
+
+# json2csv.pl
+
+Does
+  - parse request log lines
+  - outputs as csv
+  - will put quotes around values that contain the separater
+  - can config for first columns and can add constant columns (node, port, for example) 
 
