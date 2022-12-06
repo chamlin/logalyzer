@@ -26,3 +26,9 @@ Does
   - will put quotes around values that contain the separater
   - can config for first columns and can add constant columns (node, port, for example) 
 
+Example run:
+
+    ./json2csv.pl -constants node,1,port,8023 -first time,node,port -file 8023_RequestLog.txt > 1-8023.csv 
+    
+This will parse the json from the log file, add columns node and port with values 1 and 8028 respectively for each row, start the output with columns time, node, port and then alphabetically.
+
