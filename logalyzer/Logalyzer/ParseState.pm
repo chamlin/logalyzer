@@ -64,8 +64,9 @@ my $_levels = {
 };
 
 my $_event_info = {
+    'req-check' => { op => 'count', label => 'RequestRecord::checkConnection (count)' },
     'timestamp-lag-count' => { op => 'count', label => 'ts lag (count)', no_dump => 1 },
-    'timestamp-lag' => { op => 'avg', label => 'ts lag (ms avg)' },
+    'timestamp-lag' => { op => 'max', label => 'ts lag (ms max)' },
     'timestamp' => { op => 'sum', label => 'timestamp keyword (count)' },
     'journaling' => { op => 'sum', label => 'slow journal time (ms total)' },
     'journaling-count' => { op => 'count', label => 'slow journal time (message count)', no_dump => 1 },
@@ -83,7 +84,7 @@ my $_event_info = {
      merge => { op => 'sum',  label => 'total (MB)' },
     'merge-size' => { op => 'avg',  label => 'mean size (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
-    'merge-count' => { op => 'count', no_dump => 1 },
+    'merge-count' => { op => 'count', no_dump => 1, label => 'merges completed' },
     'merge-length' => { op => 'max', label => 'max length (s)', no_dump => 1 },
     'delete' => { op => 'sum',  label => 'total (MB)' },
     'delete-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
@@ -93,7 +94,7 @@ my $_event_info = {
     'saved-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'detecting' => { op => 'count',  label => 'detecting messages' },
     hung => { op => 'sum',  label => 'total (s)' },
-    canary => { op => 'sum',  label => 'total (s)' },
+    canary => { op => 'sum',  label => 'total (ms)' },
     clearing => { op => 'count',  label => 'clearing expired (count)' },
     logline => { op => 'count',  label => 'logged line', no_dump => 1 },
     rollback => { op => 'count',  label => 'rollback (messages)' },
@@ -125,31 +126,49 @@ my $_event_info = {
     'mem-unclosed-p' => { op => 'avg',  label => 'unclosed %' , no_dump => 1 },
     'mem-unclosed-mb' => { op => 'avg',  label => 'unclosed MB' , no_dump => 1 },
     'mem-forest-cache-p' => { op => 'avg',  label => 'forest+cached %' , no_dump => 1 },
-    'mem-huge-anon-swap-file-p', => { op => 'avg',  label => 'hu+an+sw+fi %' , no_dump => 1 },
-    'memory', => { op => 'count',  label => 'memory messages' },
-    'memory-low', => { op => 'count',  label => 'memory low messages' },
+    'mem-huge-anon-swap-file-p' => { op => 'avg',  label => 'hu+an+sw+fi %' , no_dump => 1 },
+    'min-query-timestamp' => { op => 'count',  label => 'min-query-timestamp due to merge' },
+    'native-plugin-cache-manifest' => { op => 'count',  label => 'native plugin cache manifest builds' },
+    'memory' => { op => 'count',  label => 'memory messages' },
+    'memory-low' => { op => 'count',  label => 'memory low messages' },
     'db-state' => { op => 'count',  label => 'db on/offline events' },
     'config' => { op => 'count',  label => 'config events' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
+    'slow-secs' => { op => 'sum',  label => 'slow messages, total sec', no_dump => 1 },
+    'forest-cleared' => { op => 'count',  label => 'forests cleared' },
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
+    'retry' => { label => 'number of retries', op => 'count' },
+    'retry-number' => { label => 'max retry #', no_dump => 1, op => 'max' },
     'no-space' => { op => 'count',  label => 'no space'},
     'security' => { op => 'count',  label => 'security messages'},
     'deadlock' => { op => 'count',  label => 'deadlock messages'},
     'replication' => { op => 'count',  label => 'replication messages'},
-    'quorum' => { op => 'avg',  label => 'quorum avg'},
+    'copy-stand' => { op => 'count',  label => 'stand copy messages'},
+    'quorum' => { op => 'avg',  label => 'nodes detected (avg)'},
     'on-disk-stand' => { op => 'count',  label => 'on-disk stand creation' },
     'in-memory-stand' => { op => 'count',  label => 'in-memory stand creation' },
     'ops-dir' => { op => 'count',  label => 'ops-dir' },
     'meters' => { op => 'count',  label => 'meters' },
-    'backup' => { op => 'count',  label => 'backup messages' },
     'rebalancer-time' => { op => 'sum',  label => 'rebalancer total time (ms)' },
     'rebalancer-run' => { op => 'count',  label => 'rebalancer runs' },
     'rebalancer-docs' => { op => 'sum',  label => 'rebalancer docs scanned' },
     'start-backup' => { op => 'count',  label => 'start backup messages' },
+    'restore-backup' => { op => 'count',  label => 'restore messages' },
     'backup' => { op => 'count',  label => 'backup messages' },
+    'backup-failed' => { op => 'count',  label => 'backup failed messages' },
+    'ldap' => { op => 'count',  label => 'ldap messages' },
+    'shutting-down' => { op => 'count',  label => 'shutting down messages', no_dump => 1 },
+    'forest-cleared' => { op => 'count',  label => 'forest-cleared messages', no_dump => 1 },
+    'odbc' => { op => 'count',  label => 'odbc messages' },
+    'bad-malloc' => { op => 'count',  label => 'bad mallocs' },
+    'termlist' => { op => 'count',  label => 'termlist messages' },
     'telemetry' => { op => 'count',  label => 'telemetry messages' },
+    'join-memory' => { op => 'count',  label => 'join-memory messages' },
     'missing-lock' => { op => 'count',  label => 'missing-lock messages' },
+    'checkpoint-token' => { op => 'count',  label => 'checkpoint-token messages' },
+    'frags-reindexed-refragmented' => { op => 'sum',  label => 'fragments reindexed/refragmented' },
+    'frags-reindexed-rate' => { op => 'avg',  label => 'reindexing/refragmenting (avg frag/s)' },
     'lc-defrag-required' => { op => 'max',  label => 'lc-defrag requi (max value)', no_dump => 1 },
     'lc-defrag-count' => { op => 'max',  label => 'lc-defrag count (max value)', no_dump => 1 },
     'lc-defrag-segments' => { op => 'sum',  label => 'lc-defrag segments moved (sum)', no_dump => 1 },
@@ -601,10 +620,24 @@ sub classify_line {
             print $csv "$rate,$mb\n";
             close $csv;
             $classified++;
+        } elsif ($text =~ m/Building new native plugin cache manifest/) {
+            push @$events, (
+                { classify => 'native-plugin-cache-manifest', value => 1 },
+            );
+            $classified++;
+        } elsif ($text =~ m/setting minQueryTimestamp .* due to merge/) {
+            push @$events, (
+                { classify => 'min-query-timestamp', value => 1 },
+            );
+            $classified++;
         } elsif ($text =~ m/^Slow /) {
             push @$events, (
                 { classify => 'slow-count', value => 1 },
             );
+            if ($text =~ m/([\d.]+) sec$/) {
+                push @$events, ({ classify => 'slow-secs', value => $1 },
+            );
+            }
             $classified++;
         } elsif ($text =~ m/to Ops Director/) {
             push @$events, (
@@ -624,6 +657,7 @@ sub classify_line {
         } elsif ($text =~ m/^Memory low:/) {
             push @$events, (
                 { classify => 'memory-low', value => 1 },
+                { classify => 'memory', value => 1 },
             );
             $classified++;
         } elsif ($text =~ m/^Memory (\d+)%/) {
@@ -664,6 +698,18 @@ sub classify_line {
             $classified++;
 #die Dumper \%values; 
         
+        } elsif ($text =~ /^RequestRecord::checkConnection/) {
+            push @$events, (
+                { classify => 'req-check', value => 1 }
+            );
+            $classified++;
+        } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
+            push @$events, (
+                { classify => 'delete', op => 'sum', value => $1 },
+                { classify => 'delete-rate', op => 'avg', value => $2 },
+                { classify => 'delete-count', value => 1 },
+            );
+            $classified++;
         } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
@@ -678,10 +724,19 @@ sub classify_line {
                 { classify => 'saved-count', value => 1 },
             );
             $classified++;
+        } elsif ($text =~ /^Re(?:fragmented|indexed) .* (\d+) fragments in \d+ sec at (\d+) /) {
+            push @$events, (
+                { classify => 'frags-reindexed-refragmented', value => $1 },
+                { classify => 'frags-reindexed-rate', value => $2 },
+            );
+            $classified++;
         } elsif ($text =~ /synchroniz(ation|ing|ed)/ || $text =~ /[Rr]eplicat(e|ing|ed) / || $text =~ /ForeignForest/ || $text =~ / bulk rep/  || $text =~ /oreign (master|replica)/ || $text =~ /^Cop(ying|ied) stand/) {
             push @$events, (
                 { classify => 'replication', value => 1 },
             );
+            if ($text =~ /^Cop(ying|ied) stand/) {
+                push @$events, ({ classify => 'copy-stand', value => 1 });
+            }
             $classified++;
         } elsif ($text =~ /[tT]imestampXXX/) {
             push @$events, (
@@ -693,6 +748,34 @@ sub classify_line {
             push @$events, (
                 { classify => 'security', value => 1 },
             );
+            $classified++;
+        # keep this above the general journal-stuff catchall
+        # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
+        # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
+        # Warning: Forest gptm-prod-scb-content-003-3 journal frame took 30539 ms to journal (sem=0 disk=0 ja=0 dbrep=30536 ld=0): {{fsn=40534759, chksum=0xe53b3840, words=74}, op=prepare, time=1642880926, mfor=7291433594718779075, mtim=16428745074998120, mfsn=40534759, fmcl=17203506554047322778, fmf=7291433594718779075, fmt=16428745074998120, fmfsn=40534759, sk=3440966126006638955, pfo=174058648}
+        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
+            push @$events, { classify => 'journaling', value => $1 };
+            push @$events, { classify => 'journaling-count' };
+            if ($2) {
+                push @$events, { classify => 'jlag-semaphore', value => $2 };
+                push @$events, { classify => 'jlag-semaphore-count' };
+            }
+            if ($3) {
+                push @$events, { classify => 'jlag-disk', value => $3 };
+                push @$events, { classify => 'jlag-disk-count' };
+            }
+            if ($4) {
+                push @$events, { classify => 'jlag-jarchive', value => $4 };
+                push @$events, { classify => 'jlag-jarchive-count' };
+            }
+            if ($5) {
+                push @$events, { classify => 'jlag-dbrep', value => $5 };
+                push @$events, { classify => 'jlag-dbrep-count' };
+            }
+            if ($6) {
+                push @$events, { classify => 'jlag-localrep', value => $6 };
+                push @$events, { classify => 'jlag-localrep-count' };
+            }
             $classified++;
         } elsif (
             $text =~ /^((Closing|Creating) journal|JournalBackup)/
@@ -731,8 +814,18 @@ sub classify_line {
             push @$events, { classify => 'hung', op => 'sum', value => $1 };
             $classified++;
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
-        } elsif ($text =~ /^Deadlock /) {
+        } elsif ($text =~ /forest cleared|Clearing forest|Cleared forest/) {
+            push @$events, { classify => 'forest-cleared', value => 1 };
+            $classified++;
+        # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
+        } elsif ($text =~ /Deadlock detected/) {
             push @$events, { classify => 'deadlock', value => 1 };
+            $classified++;
+        } elsif ($text =~ /shutting down/) {
+            push @$events, { classify => 'shutting-down', value => 1 };
+            $classified++;
+        } elsif ($text =~ /forest-cleared/) {
+            push @$events, { classify => 'forest-cleared', value => 1 };
             $classified++;
         } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
             push @$events, { classify => 'canary', op => 'sum', value => $1 };
@@ -743,38 +836,12 @@ sub classify_line {
         } elsif ($text =~ /^(Unm|M)ounted /) {
             push @$events, { classify => 'mount', op => 'count', };
             $classified++;
-        # Warning: forest FFE-0099 journal frame took 1093 ms to journal (sem=0 disk=0 ja=0 dbrep=0 ld=1093) ...
-        # Warning: Forest documents-001a journal frame took 1498 ms to journal: {{fsn=16888580, chksum=0x37046c00, words=21}, op=fastQueryTimestamp, time=1490167217, mfor=18020475790424908369, mtim=14819566813715610, mfsn=16888580, fmcl=436132992065430578, fmf=18020475790424908369, fmt=14819566813715610, fmfsn=16888580, sk=14997162585762723488}
         # 
         } elsif ($text =~ /Rebalanced .* at (\d+) fragments\/sec/) {
             push @$events, { classify => 'rebalance', op => 'avg', value => $1 };
             $classified++;
         } elsif ($text =~ /No space left on device/) {
             push @$events, { classify => 'no-space', value => 1 };
-            $classified++;
-        } elsif ($text =~ /journal frame took (\d+) ms to journal:? (?:\(sem=(\d+) disk=(\d+) ja=(\d+) dbrep=(\d+) ld=(\d+)\))?/) {
-            push @$events, { classify => 'journaling', value => $1 };
-            push @$events, { classify => 'journaling-count' };
-            if ($2) {
-                push @$events, { classify => 'jlag-semaphore', value => $2 };
-                push @$events, { classify => 'jlag-semaphore-count' };
-            }
-            if ($3) {
-                push @$events, { classify => 'jlag-disk', value => $3 };
-                push @$events, { classify => 'jlag-disk-count' };
-            }
-            if ($4) {
-                push @$events, { classify => 'jlag-jarchive', value => $4 };
-                push @$events, { classify => 'jlag-jarchive-count' };
-            }
-            if ($5) {
-                push @$events, { classify => 'jlag-dbrep', value => $5 };
-                push @$events, { classify => 'jlag-dbrep-count' };
-            }
-            if ($6) {
-                push @$events, { classify => 'jlag-localrep', value => $6 };
-                push @$events, { classify => 'jlag-localrep-count' };
-            }
             $classified++;
         } elsif ($text =~ / rolling back/) {
             push @$events, { classify => 'rollback', value => $1 };
@@ -797,9 +864,6 @@ sub classify_line {
           ) {
             push @$events, { classify => 'config' };
             $classified++;
-        } elsif ($text =~ /^Retrying /) {
-            push @$events, { classify => 'retry', op => 'count', };
-            $classified++;
         } elsif ($text =~ /^Detect.* quorum \((\d+) /) {
             push @$events, { classify => 'quorum', value => $1 };
             $classified++;
@@ -808,19 +872,51 @@ sub classify_line {
             $classified++;
         } elsif ($text =~ / REQUEST: /) {
             push @$events, { classify => 'REQUEST', op => 'count', };
+        } elsif ($text =~ /forest database backup.*failed/) {
+            push @$events, { classify => 'backup-failed' };
+            push @$events, { classify => 'backup' };
+            $classified++;
+        } elsif ($text =~ /^(Restored? forest|Finish(ing|ed) restore|Starting restore)/) {
+            if ($1 =~ /^Start/) { push @$events, { classify => 'restore-backup' } }
+            push @$events, { classify => 'restore-backup' };
+            $classified++;
         } elsif ($text =~ /^(Start|Finish|Cancel).* backup/) {
             if ($1 =~ /^Start/) { push @$events, { classify => 'start-backup' } }
             push @$events, { classify => 'backup' };
             $classified++;
+        } elsif ($text =~ /odbc/i) {
+            push @$events, { classify => 'odbc' };
+            $classified++;
+        } elsif ($text =~ /ldap/i) {
+            push @$events, { classify => 'ldap' };
+            $classified++;
+        } elsif ($text =~ /Termlist for \d+/) {
+            push @$events, { classify => 'termlist' };
+            $classified++;
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
+            $classified++;
+        } elsif ($text =~ /join.memory/i) {
+            push @$events, { classify => 'join-memory' };
             $classified++;
         } elsif ($text =~ /^Missing lock: /) {
             push @$events, { classify => 'missing-lock' };
             $classified++;
+        } elsif ($text =~ /^Forest\s\S+\scheckpoint token=/) {
+            push @$events, { classify => 'checkpoint-token' };
+            $classified++;
         }
         if ($text =~ /java.net.ConnectException/) {
             push @$events, { classify => "java.net.ConnectException", op => 'count', };
+            $classified++;
+        }
+        if ($text =~ /Bad malloc/) {
+            push @$events, { classify => "bad-malloc" };
+            $classified++;
+        }
+        if ($text =~ /^Retrying.* (\d+) because /) {
+            push @$events, { classify => 'retry' };
+            push @$events, { classify => 'retry-number', value => $1 };
             $classified++;
         }
         if ($text =~ /orest (\S\S+)/) {
