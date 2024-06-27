@@ -132,6 +132,7 @@ my $_event_info = {
     'memory' => { op => 'count',  label => 'memory messages' },
     'memory-low' => { op => 'count',  label => 'memory low messages' },
     'db-state' => { op => 'count',  label => 'db on/offline events' },
+    'domestic-dis-connect' => { op => 'count',  label => 'domestic (dis)connects' },
     'config' => { op => 'count',  label => 'config events' },
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
@@ -153,6 +154,8 @@ my $_event_info = {
     'rebalancer-time' => { op => 'sum',  label => 'rebalancer total time (ms)' },
     'rebalancer-run' => { op => 'count',  label => 'rebalancer runs' },
     'rebalancer-docs' => { op => 'sum',  label => 'rebalancer docs scanned' },
+    'startup' => { op => 'count',  label => 'startup messages' },
+    'user-shutdown' => { op => 'count',  label => 'user shutdown' },
     'start-backup' => { op => 'count',  label => 'start backup messages' },
     'restore-backup' => { op => 'count',  label => 'restore messages' },
     'backup' => { op => 'count',  label => 'backup messages' },
@@ -501,7 +504,7 @@ sub app_code {
     my ($self, $text) = @_;
     my $prefixes = $self->{prefixes};
     my @codes = ();
-    while ($text =~ /([A-Z]+|X509)-([A-Z]+): /g) {
+    while ($text =~ /([A-Z]+|X509)-([A-Z]+)/g) {
         if (exists $prefixes->{$1}) {
             push @codes, "$1-$2";
         }
@@ -724,6 +727,11 @@ sub classify_line {
                 { classify => 'saved-count', value => 1 },
             );
             $classified++;
+        } elsif ($text =~ /^(Connected|Disconnected|Disconnecting) (from|to) domestic host/) {
+            push @$events, (
+                { classify => 'domestic-dis-connect', value => 1 },
+            );
+            $classified++;
         } elsif ($text =~ /^Re(?:fragmented|indexed) .* (\d+) fragments in \d+ sec at (\d+) /) {
             push @$events, (
                 { classify => 'frags-reindexed-refragmented', value => $1 },
@@ -892,6 +900,13 @@ sub classify_line {
             $classified++;
         } elsif ($text =~ /Termlist for \d+/) {
             push @$events, { classify => 'termlist' };
+            $classified++;
+        # going to break this one up a bit, if more added
+        } elsif ($text =~ /((Increased|Reduced) Linux kernel)|(Using \S+ (tokenization|stemming))/) {
+            push @$events, { classify => 'startup', op => 'count', };
+            $classified++;
+        } elsif ($text =~ /Stopping by SIGTERM/) {
+            push @$events, { classify => 'user-shutdown', op => 'count', };
             $classified++;
         } elsif ($text =~ /^Starting MarkLogic Server /) {
             push @$events, { classify => 'restart', op => 'count', };
