@@ -95,6 +95,7 @@ my $_event_info = {
     'detecting' => { op => 'count',  label => 'detecting messages' },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (ms)' },
+    'hung-canary' => { op => 'sum',  label => 'hung or canary, total (ms)' },
     clearing => { op => 'count',  label => 'clearing expired (count)' },
     logline => { op => 'count',  label => 'logged line', no_dump => 1 },
     rollback => { op => 'count',  label => 'rollback (messages)' },
@@ -137,6 +138,7 @@ my $_event_info = {
     'rebalance' => { op => 'avg',  label => 'avg frag/sec' },
     'slow-count' => { op => 'sum',  label => 'slow messages' },
     'slow-secs' => { op => 'sum',  label => 'slow messages, total sec', no_dump => 1 },
+    'segfaults' => { op => 'avg',  label => 'segfaults' },
     'forest-cleared' => { op => 'count',  label => 'forests cleared' },
     'stand-stuff' => { op => 'sum',  label => 'stand messages'},
     'retry' => { label => 'number of retries', op => 'count' },
@@ -706,6 +708,11 @@ sub classify_line {
                 { classify => 'req-check', value => 1 }
             );
             $classified++;
+        } elsif ($text =~ /Segmentation fault in thread/) {
+            push @$events, (
+                { classify => 'segfaults', value => 1 }
+            );
+            $classified++;
         } elsif ($text =~ /^Deleted (\d+) MB .*?at (\d+) MB/) {
             push @$events, (
                 { classify => 'delete', op => 'sum', value => $1 },
@@ -819,7 +826,8 @@ sub classify_line {
             }
             $classified++;
         } elsif ($text =~ /^Hung (\d+) sec/) {
-            push @$events, { classify => 'hung', op => 'sum', value => $1 };
+            push @$events, { classify => 'hung', value => $1 };
+            push @$events, { classify => 'hung-canary', value => $1 };
             $classified++;
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
         } elsif ($text =~ /forest cleared|Clearing forest|Cleared forest/) {
@@ -836,7 +844,8 @@ sub classify_line {
             push @$events, { classify => 'forest-cleared', value => 1 };
             $classified++;
         } elsif ($text =~ /^Canary thread sleep was (\d+) ms/) {
-            push @$events, { classify => 'canary', op => 'sum', value => $1 };
+            push @$events, { classify => 'canary', value => $1 };
+            push @$events, { classify => 'hung-canary', value => $1 };
             $classified++;
         } elsif ($text =~ /^Forest .* (state|accepts|assuming)/ || $text =~ / accepts forest / || $text =~ /^~Forest/) {
             push @$events, { classify => 'forest-state', op => 'count', };
@@ -949,7 +958,11 @@ sub classify_line {
             $line_info->{events} = [{ classify => 'misc', 'op' => 'count' }];
         }
     } elsif (length ($line) > 0) {
-        $line_info->{events} = [{ classify => 'sys', op => 'count', }];
+        if ($line =~ /Critical:\+(Thread \d|#\d)/) {
+            $line_info->{events} = [ { classify => 'segfaults', value => 1 }];
+        } else {
+            $line_info->{events} = [{ classify => 'sys', op => 'count', }];
+        }
     } else {
         # empty line?
     }
