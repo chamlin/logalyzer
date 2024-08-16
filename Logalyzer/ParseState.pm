@@ -506,7 +506,7 @@ sub app_code {
     my ($self, $text) = @_;
     my $prefixes = $self->{prefixes};
     my @codes = ();
-    while ($text =~ /([A-Z]+|X509)-([A-Z]+)/g) {
+    while ($text =~ /([A-Z]+|X509)-(S3ERR|[A-Z]+)/g) {
         if (exists $prefixes->{$1}) {
             push @codes, "$1-$2";
         }
