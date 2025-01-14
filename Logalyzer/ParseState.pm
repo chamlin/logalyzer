@@ -907,11 +907,11 @@ sub classify_line {
         } elsif ($text =~ /ldap/i) {
             push @$events, { classify => 'ldap' };
             $classified++;
-        } elsif ($text =~ /Termlist for \d+/) {
+        } elsif ($text =~ /(Termlist for \d+|Discarding merged positions)/) {
             push @$events, { classify => 'termlist' };
             $classified++;
         # going to break this one up a bit, if more added
-        } elsif ($text =~ /((Increased|Reduced) Linux kernel)|(Using \S+ (tokenization|stemming))/) {
+        } elsif ($text =~ /((Increased|Reduced) Linux kernel)|(Using \S+ (tokenization|stemming))|(MarkLogic Converters)|(Linux swap)/) {
             push @$events, { classify => 'startup', op => 'count', };
             $classified++;
         } elsif ($text =~ /Stopping by SIGTERM/) {
