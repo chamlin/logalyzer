@@ -81,6 +81,7 @@ my $_event_info = {
     'jlag-dbrep-count' => { op => 'count', label => 'journal lag time, dbrep (message count)', no_dump => 1 },
     'jlag-localrep' => { op => 'sum', label => 'journal lag time, local rep (ms total)' },
     'jlag-localrep-count' => { op => 'count', label => 'journal lag time, local rep (message count)', no_dump => 1 },
+    'disk-hang' => { op => 'sum', label => 'DiskCheck hang, disk (s total)' },
      merge => { op => 'sum',  label => 'total (MB)' },
     'merge-size' => { op => 'avg',  label => 'mean size (MB)' },
     'merge-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
@@ -744,6 +745,12 @@ sub classify_line {
                 { classify => 'reindexed-refragmented', value => $1 },
                 { classify => 'reindexed-rate', value => $2 },
             );
+            $classified++;
+        } elsif ($text =~ /DiskCheck hang for (\d+) seconds/) {
+            push @$events, (
+                { classify => 'disk-hang', value => $1 }
+            );
+print STDERR "Disk hang $1 seconds.\n";
             $classified++;
         } elsif ($text =~ /synchroniz(ation|ing|ed)/ || $text =~ /[Rr]eplicat(e|ing|ed) / || $text =~ /ForeignForest/ || $text =~ / bulk rep/  || $text =~ /oreign (master|replica)/ || $text =~ /^Cop(ying|ied) stand/) {
             push @$events, (
