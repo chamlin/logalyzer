@@ -750,7 +750,6 @@ sub classify_line {
             push @$events, (
                 { classify => 'disk-hang', value => $1 }
             );
-print STDERR "Disk hang $1 seconds.\n";
             $classified++;
         } elsif ($text =~ /synchroniz(ation|ing|ed)/ || $text =~ /[Rr]eplicat(e|ing|ed) / || $text =~ /ForeignForest/ || $text =~ / bulk rep/  || $text =~ /oreign (master|replica)/ || $text =~ /^Cop(ying|ied) stand/) {
             push @$events, (
