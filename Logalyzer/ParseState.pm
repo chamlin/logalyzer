@@ -94,6 +94,7 @@ my $_event_info = {
     'saved-count' => { op => 'count',  label => 'saved (count)', no_dump => 1 },
     'saved-rate' => { op => 'avg',  label => 'mean (MB/s)', no_dump => 1 },
     'detecting' => { op => 'count',  label => 'detecting messages' },
+    'obsolete-stand-time' => { op => 'max', label => 'max obsolete stand (s)' },
     hung => { op => 'sum',  label => 'total (s)' },
     canary => { op => 'sum',  label => 'total (ms)' },
     'hung-canary' => { op => 'sum',  label => 'hung or canary, total (ms)' },
@@ -834,6 +835,9 @@ sub classify_line {
         } elsif ($text =~ /^Hung (\d+) sec/) {
             push @$events, { classify => 'hung', value => $1 };
             push @$events, { classify => 'hung-canary', value => $1 };
+            $classified++;
+        } elsif ($text =~ /^XDMP-OBSOLETESTANDNOTDELETED: .*not deleted for (\d+) seconds/) {
+            push @$events, { classify => 'obsolete-stand-time', value => $1 };
             $classified++;
         # 2017-01-31 03:00:42.422 tcffmppr6db29   2017-01-31 03:00:42.422 Warning: Canary thread sleep was 2186 ms
         } elsif ($text =~ /forest cleared|Clearing forest|Cleared forest/) {
